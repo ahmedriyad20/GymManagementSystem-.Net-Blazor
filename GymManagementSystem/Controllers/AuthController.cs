@@ -12,6 +12,8 @@ using System.Threading.Tasks;
 
 namespace GymManagementSystem.Controllers
 {
+    [ApiController]
+    [Route("api/auth")]
     public class AuthController(IAuthService _authService) : ControllerBase
     {
 

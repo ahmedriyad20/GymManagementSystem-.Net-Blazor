@@ -6,8 +6,9 @@ namespace GymManagementSystem.Enums
 {
     public enum enSubscriptionPeriod
     {
+        Daily = 0,
         Monthly = 1,
-        Quarterly = 3,
+        SixMonths = 6,
         Yearly = 12
     }
 }

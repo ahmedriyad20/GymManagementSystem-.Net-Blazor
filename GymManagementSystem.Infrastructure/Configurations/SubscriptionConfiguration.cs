@@ -17,6 +17,9 @@ namespace GymManagementSystem.Configurations
             builder.Property(s => s.RemainingAmount)
                 .HasColumnType("decimal(18,2)")
                 .IsRequired();
+            builder.Property(s => s.TotalAmount)
+                .HasColumnType("decimal(18,2)")
+                .IsRequired();
             builder.Property(s => s.SubscriptionPlan)
                 .IsRequired();
             builder.Property(s => s.SubscriptionPeriod)
@@ -25,6 +28,16 @@ namespace GymManagementSystem.Configurations
                 .IsRequired();
             builder.Property(s => s.EndDate)
                 .IsRequired();
+
+            builder.HasOne(s => s.Trainee)
+                .WithMany(t => t.Subscriptions)
+                .HasForeignKey(s => s.TraineeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasMany(s => s.AttendanceSessions)
+                .WithOne(a => a.Subscription)
+                .HasForeignKey(a => a.SubscriptionId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }
