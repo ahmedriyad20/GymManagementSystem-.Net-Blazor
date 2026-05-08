@@ -11,6 +11,7 @@ namespace GymManagementSystem.Extensions
         {
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<ITraineeService, TraineeService>();
+            services.AddScoped<IStorageService, StorageService>();
             services.AddScoped<IGymManagementService, GymManagementService>();
             services.AddScoped<ISubscriptionPriceService, SubscriptionPriceService>();
             services.AddScoped<IUserService, UserService>();

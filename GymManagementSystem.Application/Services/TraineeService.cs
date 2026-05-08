@@ -13,6 +13,7 @@ namespace GymManagementSystem.Services
 {
     public class TraineeService(
         IRepository<Trainee> traineeRepository,
+        IStorageService storageService,
         UserManager<User> userManager) : ITraineeService
     {
         public async Task<List<GetAllTraineesResult>> GetAllAsync(GetAllTraineesQuery query, string currentUserId)
@@ -56,6 +57,7 @@ namespace GymManagementSystem.Services
                     Name = t.Name,
                     Phone = t.Phone,
                     Gender = t.Gender.ToString(),
+                    PhotoPath = string.IsNullOrWhiteSpace(t.PhotoPath) ? null : storageService.BuildFileUrl(t.PhotoPath),
                     CurrentSubscriptionEndDate = currentSubscription?.EndDate,
                     RemainingAmount = currentSubscription?.RemainingAmount,
                     CreationTime = t.CreationTime
@@ -87,6 +89,7 @@ namespace GymManagementSystem.Services
                 Name = trainee.Name,
                 Phone = trainee.Phone,
                 Gender = trainee.Gender.ToString(),
+                PhotoPath = string.IsNullOrWhiteSpace(trainee.PhotoPath) ? null : storageService.BuildFileUrl(trainee.PhotoPath),
                 DateOfBirth = trainee.DateOfBirth,
                 IsActive = trainee.IsActive,
                 CreationTime = trainee.CreationTime,
@@ -112,13 +115,20 @@ namespace GymManagementSystem.Services
 
         public async Task<Guid> CreateAsync(CreateTraineeCommand command)
         {
+            string? relativePhotoPath = null;
+            if (command.Photo is not null)
+            {
+                relativePhotoPath = await storageService.UploadAsync(command.Photo, "trainees", withBaseUrl: false);
+            }
+
             var trainee = new Trainee
             {
                 Name = command.Name,
                 Phone = command.Phone,
                 Gender = command.Gender,
                 DateOfBirth = command.DateOfBirth,
-                IsActive = true
+                IsActive = true,
+                PhotoPath = relativePhotoPath
             };
 
             await traineeRepository.InsertAsync(trainee);
@@ -138,6 +148,15 @@ namespace GymManagementSystem.Services
             trainee.Gender = command.Gender;
             trainee.DateOfBirth = command.DateOfBirth;
             trainee.IsActive = command.IsActive;
+            if (command.Photo is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(trainee.PhotoPath))
+                {
+                    storageService.Delete(trainee.PhotoPath);
+                }
+
+                trainee.PhotoPath = await storageService.UploadAsync(command.Photo, "trainees", withBaseUrl: false);
+            }
 
             await traineeRepository.UpdateAsync(trainee);
             return true;
@@ -149,6 +168,11 @@ namespace GymManagementSystem.Services
             if (trainee is null)
             {
                 return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(trainee.PhotoPath))
+            {
+                storageService.Delete(trainee.PhotoPath);
             }
 
             await traineeRepository.DeleteAsync(trainee);

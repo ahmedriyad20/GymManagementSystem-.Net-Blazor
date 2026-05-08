@@ -39,14 +39,14 @@ namespace GymManagementSystem.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> CreateTrainee([FromBody] CreateTraineeCommand command)
+        public async Task<IActionResult> CreateTrainee([FromForm] CreateTraineeCommand command)
         {
             var traineeId = await traineeService.CreateAsync(command);
             return Ok(new { traineeId, message = "Trainee created successfully." });
         }
 
         [HttpPut("{traineeId:guid}")]
-        public async Task<IActionResult> UpdateTrainee(Guid traineeId, [FromBody] UpdateTraineeCommand command)
+        public async Task<IActionResult> UpdateTrainee(Guid traineeId, [FromForm] UpdateTraineeCommand command)
         {
             var updated = await traineeService.UpdateAsync(traineeId, command);
             return updated ? Ok(new { message = "Trainee updated successfully." }) : NotFound(new { message = "Trainee not found." });

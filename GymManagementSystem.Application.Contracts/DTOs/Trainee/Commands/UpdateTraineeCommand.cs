@@ -1,4 +1,5 @@
 using GymManagementSystem.Enums;
+using Microsoft.AspNetCore.Http;
 
 namespace GymManagementSystem.DTOs.Trainee.Commands
 {
@@ -9,5 +10,6 @@ namespace GymManagementSystem.DTOs.Trainee.Commands
         public enGender Gender { get; set; }
         public DateTime DateOfBirth { get; set; }
         public bool IsActive { get; set; } = true;
+        public IFormFile? Photo { get; set; }
     }
 }

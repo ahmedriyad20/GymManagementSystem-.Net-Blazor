@@ -6,6 +6,7 @@ namespace GymManagementSystem.DTOs.Trainee.Results
         public string Name { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
         public string Gender { get; set; } = string.Empty;
+        public string? PhotoPath { get; set; }
         public DateTime DateOfBirth { get; set; }
         public bool IsActive { get; set; }
         public DateTime CreationTime { get; set; }
