@@ -1,0 +1,172 @@
+﻿@page "/expenses"
+@attribute [Authorize]
+@inject ApiClient ApiClient
+@inject NavigationManager Navigation
+
+<div class="expenses-page">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+        <div>
+            <h1 class="display-6 fw-bold mb-1">سجل المصاريف</h1>
+            <p class="text-secondary mb-0">إدارة وتتبع النفقات التشغيلية اليومية والشهرية للصالة الرياضية.</p>
+        </div>
+        <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/expenses/new")'>
+            <i class="bi bi-plus-circle ms-1"></i>
+            إضافة مصروف جديد
+        </button>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-lg-4">
+            <div class="card border-0 shadow-sm expenses-stat danger">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="fw-semibold">إجمالي مصاريف الشهر</span>
+                        <i class="bi bi-wallet2 text-danger"></i>
+                    </div>
+                    <div class="display-6 fw-bold text-danger mb-0">@CurrentMonthTotal.ToString("0.##") ج.م</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="card border-0 shadow-sm expenses-stat">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="fw-semibold">عدد العمليات</span>
+                        <i class="bi bi-receipt text-secondary"></i>
+                    </div>
+                    <div class="display-6 fw-bold mb-0">@expenses.Count</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="card border-0 shadow-sm expenses-stat primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="fw-semibold">إجمالي كل السجلات</span>
+                        <i class="bi bi-graph-up text-primary"></i>
+                    </div>
+                    <div class="display-6 fw-bold text-primary mb-0">@GrandTotal.ToString("0.##") ج.م</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm trainees-table-card">
+        <div class="card-body border-bottom">
+            <div class="row g-2 align-items-center">
+                <div class="col-12 col-lg-4">
+                    <InputText class="form-control" @bind-Value="searchText" placeholder="بحث في المصاريف..." />
+                </div>
+                <div class="col-6 col-lg-3">
+                    <InputDate class="form-control" @bind-Value="fromDate" />
+                </div>
+                <div class="col-6 col-lg-3">
+                    <InputDate class="form-control" @bind-Value="toDate" />
+                </div>
+                <div class="col-12 col-lg-2 d-grid">
+                    <button class="btn btn-outline-secondary" @onclick="LoadAsync">تصفية</button>
+                </div>
+            </div>
+        </div>
+
+        @if (loading)
+        {
+            <div class="p-4 text-secondary">جاري تحميل المصاريف...</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle mb-0 trainees-table">
+                    <thead>
+                    <tr>
+                        <th>التاريخ</th>
+                        <th>الوصف</th>
+                        <th>الفئة</th>
+                        <th>بواسطة</th>
+                        <th>المبلغ</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @if (FilteredExpenses.Count == 0)
+                    {
+                        <tr><td colspan="5" class="text-center py-4 text-secondary">لا توجد مصاريف مطابقة للفلاتر الحالية</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var expense in FilteredExpenses)
+                        {
+                            <tr>
+                                <td class="text-secondary">@expense.ExpenseDate.ToString("yyyy/MM/dd")</td>
+                                <td>
+                                    <div class="fw-semibold">@expense.Description</div>
+                                    @if (!string.IsNullOrWhiteSpace(expense.Notes))
+                                    {
+                                        <small class="text-secondary">@expense.Notes</small>
+                                    }
+                                </td>
+                                <td>@expense.Category</td>
+                                <td>@expense.PaidBy</td>
+                                <td class="text-danger fw-semibold">@expense.Amount.ToString("0.##") ج.م</td>
+                            </tr>
+                        }
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="alert alert-danger mt-3">@message</div>
+    }
+</div>
+
+@code {
+    private bool loading;
+    private string? message;
+    private string? searchText;
+    private DateTime? fromDate;
+    private DateTime? toDate;
+    private List<ExpenseResult> expenses = [];
+
+    private List<ExpenseResult> FilteredExpenses => expenses
+        .Where(e => string.IsNullOrWhiteSpace(searchText)
+                    || e.Description.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+                    || (e.Category ?? string.Empty).Contains(searchText, StringComparison.OrdinalIgnoreCase)
+                    || (e.PaidBy ?? string.Empty).Contains(searchText, StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(e => e.ExpenseDate)
+        .ToList();
+
+    private decimal CurrentMonthTotal => expenses
+        .Where(e => e.ExpenseDate.Year == DateTime.Now.Year && e.ExpenseDate.Month == DateTime.Now.Month)
+        .Sum(e => e.Amount);
+
+    private decimal GrandTotal => expenses.Sum(e => e.Amount);
+
+    protected override async Task OnInitializedAsync()
+    {
+        fromDate = null;
+        toDate = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        message = null;
+
+        try
+        {
+            expenses = await ApiClient.GetExpensesAsync(fromDate, toDate);
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

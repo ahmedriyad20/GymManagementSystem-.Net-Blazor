@@ -1,0 +1,250 @@
+﻿@page "/trainees/register"
+@attribute [Authorize]
+@inject ApiClient ApiClient
+@inject NavigationManager Navigation
+
+<div class="register-page">
+    <div class="register-header mb-4">
+        <h1 class="display-6 fw-bold mb-1">تسجيل متدرب</h1>
+        <p class="text-secondary mb-0">إضافة عضو جديد إلى قاعدة بيانات Lion Gym</p>
+    </div>
+
+    <EditForm Model="form" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+
+        <section class="register-section card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h3 class="section-title">المعلومات الشخصية</h3>
+
+                <div class="row g-4 align-items-stretch">
+                    <div class="col-lg-8">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label">الاسم الكامل</label>
+                                <InputText class="form-control form-control-lg" @bind-Value="form.Name" placeholder="مثال: أحمد محمد" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">رقم الهاتف</label>
+                                <InputText class="form-control form-control-lg" @bind-Value="form.Phone" placeholder="+966 50 000 0000" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">الجنس</label>
+                                <InputSelect class="form-select form-select-lg" @bind-Value="form.Gender">
+                                    <option value="@enGender.Male">ذكر</option>
+                                    <option value="@enGender.Female">أنثى</option>
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">تاريخ الميلاد</label>
+                                <InputDate class="form-control form-control-lg" @bind-Value="form.DateOfBirth" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-4">
+                        <label class="photo-dropzone h-100" for="photoInput">
+                            <i class="bi bi-camera-fill fs-1"></i>
+                            <h6 class="mt-3 mb-1">تحميل صورة</h6>
+                            <p class="mb-0 text-secondary">JPG أو PNG، بحد أقصى 2 ميجابايت</p>
+                            @if (!string.IsNullOrWhiteSpace(selectedPhotoName))
+                            {
+                                <small class="text-success d-block mt-2">@selectedPhotoName</small>
+                            }
+                            else
+                            {
+                                <small class="text-muted d-block mt-2">اضغط لاختيار الصورة</small>
+                            }
+                        </label>
+                        <InputFile id="photoInput" class="d-none" OnChange="OnPhotoChanged" accept=".jpg,.jpeg,.png,image/jpeg,image/png" />
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="register-section card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h3 class="section-title">تفاصيل الاشتراك</h3>
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">خطة الاشتراك</label>
+                        <InputSelect class="form-select form-select-lg" @bind-Value="form.SubscriptionPlan">
+                            <option value="@enSubscriptionPlan.Basic">Basic</option>
+                            <option value="@enSubscriptionPlan.Cardio">Cardio</option>
+                        </InputSelect>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">المدة</label>
+                        <InputSelect class="form-select form-select-lg" @bind-Value="form.SubscriptionPeriod">
+                            <option value="@enSubscriptionPeriod.Daily">Daily</option>
+                            <option value="@enSubscriptionPeriod.Monthly">Monthly</option>
+                            <option value="@enSubscriptionPeriod.SixMonths">SixMonths</option>
+                            <option value="@enSubscriptionPeriod.Yearly">Yearly</option>
+                        </InputSelect>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">تاريخ بداية الاشتراك</label>
+                        <InputDate class="form-control form-control-lg" @bind-Value="form.StartDate" />
+                    </div>
+                </div>
+
+                @if (prices.Count > 0)
+                {
+                    <div class="price-hint mt-3">
+                        السعر الحالي: <b>@ResolveTotalPrice()</b>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <section class="register-section card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h3 class="section-title">الدفع</h3>
+
+                <div class="form-check form-switch mb-3">
+                    <InputCheckbox class="form-check-input" @bind-Value="form.IsFullyPaid" />
+                    <label class="form-check-label me-2">تم الدفع بالكامل</label>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">المبلغ المدفوع</label>
+                        <InputNumber class="form-control form-control-lg" @bind-Value="form.PaidAmount" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">الرصيد المتبقي</label>
+                        <InputNumber class="form-control form-control-lg" @bind-Value="form.RemainingAmount" disabled="@form.IsFullyPaid" />
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @if (!string.IsNullOrWhiteSpace(message))
+        {
+            <div class="alert @(message.Contains("بنجاح") ? "alert-success" : "alert-danger")">@message</div>
+        }
+
+        <div class="d-flex gap-2 justify-content-start">
+            <button class="btn btn-primary btn-lg" type="submit" disabled="@saving">
+                <i class="bi bi-person-check-fill ms-1"></i>
+                @((saving ? "جاري الحفظ..." : "تسجيل المتدرب"))
+            </button>
+            <button class="btn btn-outline-secondary btn-lg" type="button" @onclick='() => Navigation.NavigateTo("/trainees")'>إلغاء</button>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private RegistrationForm form = new();
+    private List<GetAllSubscriptionPricesResult> prices = [];
+    private bool saving;
+    private string? message;
+    private IBrowserFile? selectedPhoto;
+    private string? selectedPhotoName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        prices = await ApiClient.GetSubscriptionPricesAsync();
+        form.PaidAmount = ResolveTotalPrice();
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        message = null;
+
+        try
+        {
+            var total = ResolveTotalPrice();
+            if (form.IsFullyPaid)
+            {
+                form.PaidAmount = total;
+                form.RemainingAmount = 0;
+            }
+            else
+            {
+                form.PaidAmount = Math.Max(0, total - form.RemainingAmount);
+            }
+
+            var traineeId = await ApiClient.CreateTraineeAsync(new CreateTraineeCommand
+            {
+                Name = form.Name,
+                Phone = form.Phone,
+                DateOfBirth = form.DateOfBirth,
+                Gender = form.Gender
+            }, selectedPhoto);
+
+            await ApiClient.CreateSubscriptionAsync(new CreateSubscriptionCommand
+            {
+                TraineeId = traineeId,
+                SubscriptionPlan = form.SubscriptionPlan,
+                SubscriptionPeriod = form.SubscriptionPeriod,
+                PaidAmount = form.PaidAmount,
+                StartDate = form.StartDate
+            });
+
+            message = "تم تسجيل المتدرب بنجاح.";
+            form = new RegistrationForm();
+            selectedPhoto = null;
+            selectedPhotoName = null;
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private decimal ResolveTotalPrice()
+    {
+        var price = prices.FirstOrDefault(x => x.SubscriptionPlan == form.SubscriptionPlan.ToString() && x.SubscriptionPeriod == form.SubscriptionPeriod.ToString());
+        return price?.Price ?? 0m;
+    }
+
+    private void OnPhotoChanged(InputFileChangeEventArgs e)
+    {
+        message = null;
+        selectedPhoto = null;
+        selectedPhotoName = null;
+
+        var file = e.File;
+        if (file is null)
+        {
+            return;
+        }
+
+        var ext = System.IO.Path.GetExtension(file.Name).ToLowerInvariant();
+        var isAllowedExt = ext is ".jpg" or ".jpeg" or ".png";
+        if (!isAllowedExt)
+        {
+            message = "صيغة الصورة غير مدعومة. استخدم JPG أو PNG.";
+            return;
+        }
+
+        if (file.Size > 2 * 1024 * 1024)
+        {
+            message = "حجم الصورة أكبر من 2 ميجابايت.";
+            return;
+        }
+
+        selectedPhoto = file;
+        selectedPhotoName = file.Name;
+    }
+
+    private class RegistrationForm
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public DateTime DateOfBirth { get; set; } = DateTime.Today.AddYears(-20);
+        public enGender Gender { get; set; } = enGender.Male;
+        public enSubscriptionPlan SubscriptionPlan { get; set; } = enSubscriptionPlan.Basic;
+        public enSubscriptionPeriod SubscriptionPeriod { get; set; } = enSubscriptionPeriod.Monthly;
+        public DateTime StartDate { get; set; } = DateTime.Today;
+        public bool IsFullyPaid { get; set; } = true;
+        public decimal RemainingAmount { get; set; }
+        public decimal PaidAmount { get; set; }
+    }
+}

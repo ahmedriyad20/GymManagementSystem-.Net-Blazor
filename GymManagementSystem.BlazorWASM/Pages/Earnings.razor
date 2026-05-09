@@ -1,0 +1,244 @@
+﻿@page "/earnings"
+@attribute [Authorize]
+@inject ApiClient ApiClient
+
+<div class="earnings-page">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+        <div>
+            <h1 class="display-5 fw-bold mb-1">الأرباح</h1>
+            <p class="text-secondary mb-0">مراجعة الإيرادات وتحليل الاتجاهات وتتبع الاشتراكات.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <select class="form-select" style="min-width:200px" value="@selectedPeriod" @onchange="OnPeriodChangedAsync">
+                <option value="30">آخر 30 يوماً</option>
+                <option value="month">هذا الشهر</option>
+                <option value="quarter">الربع الأخير</option>
+                <option value="year">منذ بداية العام</option>
+            </select>
+            <button class="btn btn-outline-secondary" @onclick="ExportSummary">
+                <i class="bi bi-download ms-1"></i>
+                تصدير
+            </button>
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <div class="card border-0 shadow-sm p-4 text-secondary">جاري تحميل بيانات الأرباح...</div>
+    }
+    else if (dashboard is not null)
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-lg-4">
+                <div class="card border-0 shadow-sm earnings-stat h-100">
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="text-secondary fw-semibold">إجمالي الأرباح الكلية</span>
+                            <i class="bi bi-bank text-primary"></i>
+                        </div>
+                        <div class="display-5 fw-bold mb-1">@FormatMoney(dashboard.TotalEarnings)</div>
+                        <div class="text-success small">+@dashboard.YearOverYearGrowthPercent.ToString("0.##")% مقارنة بالعام الماضي</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-lg-4">
+                <div class="card border-0 shadow-sm earnings-stat h-100">
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="text-secondary fw-semibold">أرباح الشهر الحالي</span>
+                            <i class="bi bi-cash-coin text-success"></i>
+                        </div>
+                        <div class="display-5 fw-bold mb-1">@FormatMoney(dashboard.MonthlyEarnings)</div>
+                        <div class="text-success small">@dashboard.MonthOverMonthGrowthPercent.ToString("+0.##;-0.##;0")% مقارنة بالشهر الماضي</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-lg-4">
+                <div class="card border-0 shadow-sm earnings-stat h-100">
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="text-secondary fw-semibold">الاشتراكات النشطة</span>
+                            <i class="bi bi-people text-secondary"></i>
+                        </div>
+                        <div class="display-5 fw-bold mb-1">@dashboard.ActiveSubscriptions.ToString("N0")</div>
+                        <div class="text-secondary small">@dashboard.NewSubscriptionsThisMonth جديد هذا الشهر</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-12 col-xl-4">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h4 class="h3 fw-bold mb-0">أحدث المعاملات</h4>
+                            <a href="/finance" class="small fw-bold text-decoration-none">عرض الكل</a>
+                        </div>
+
+                        @if (dashboard.RecentTransactions.Count == 0)
+                        {
+                            <div class="text-secondary">لا توجد معاملات حديثة.</div>
+                        }
+                        else
+                        {
+                            @foreach (var item in dashboard.RecentTransactions)
+                            {
+                                <div class="d-flex justify-content-between align-items-start py-2 border-bottom">
+                                    <div>
+                                        <div class="fw-semibold">@item.Name</div>
+                                        <div class="text-secondary small">@item.Description</div>
+                                    </div>
+                                    <div class="text-start">
+                                        <div class="fw-semibold @(item.Amount >= 0 ? "text-dark" : "text-danger")">@FormatSignedMoney(item.Amount)</div>
+                                        <div class="small @(MapStatusClass(item.Status))">@MapStatusText(item.Status)</div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-xl-8">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <h3 class="h2 fw-bold mb-0">اتجاه الإيرادات</h3>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-light active">شهرياً</button>
+                                <button class="btn btn-sm btn-light" disabled>أسبوعياً</button>
+                            </div>
+                        </div>
+
+                        <div class="trend-chart">
+                            @if (dashboard.MonthlyTrend.Count == 0)
+                            {
+                                <div class="text-secondary">لا توجد بيانات كافية لعرض الاتجاه.</div>
+                            }
+                            else
+                            {
+                                var max = Math.Max(1m, dashboard.MonthlyTrend.Max(x => x.Amount));
+                                <div class="trend-bars">
+                                    @foreach (var p in dashboard.MonthlyTrend)
+                                    {
+                                        var h = Math.Max(8m, (p.Amount / max) * 100m);
+                                        <div class="trend-bar-wrap" title="@FormatMoney(p.Amount)">
+                                            <div class="trend-bar" style="height:@h%;"></div>
+                                            <div class="trend-label">@MonthNameAr(p.Month)</div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="alert mt-3 @(isError ? "alert-danger" : "alert-success")">@message</div>
+    }
+</div>
+
+@code {
+    private bool loading;
+    private bool isError;
+    private string? message;
+    private string selectedPeriod = "30";
+    private EarningsDashboardResult? dashboard;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task OnPeriodChangedAsync(ChangeEventArgs e)
+    {
+        selectedPeriod = e.Value?.ToString() ?? "30";
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        isError = false;
+        message = null;
+
+        try
+        {
+            var target = ResolvePeriodDate();
+            dashboard = await ApiClient.GetEarningsDashboardAsync(target.Year, target.Month);
+        }
+        catch (Exception ex)
+        {
+            isError = true;
+            message = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private DateTime ResolvePeriodDate()
+    {
+        var now = DateTime.Now;
+        return selectedPeriod switch
+        {
+            "month" => new DateTime(now.Year, now.Month, 1),
+            "quarter" => new DateTime(now.Year, now.Month, 1).AddMonths(-2),
+            "year" => new DateTime(now.Year, now.Month, 1),
+            _ => new DateTime(now.Year, now.Month, 1)
+        };
+    }
+
+    private void ExportSummary()
+    {
+        if (dashboard is null)
+        {
+            isError = true;
+            message = "لا توجد بيانات للتصدير.";
+            return;
+        }
+
+        isError = false;
+        message = $"إجمالي الأرباح: {FormatMoney(dashboard.TotalEarnings)} | أرباح الشهر: {FormatMoney(dashboard.MonthlyEarnings)}";
+    }
+
+    private static string FormatMoney(decimal amount) => $"{amount:N2} ج.م";
+    private static string FormatSignedMoney(decimal amount) => $"{(amount >= 0 ? "+" : "-")}{Math.Abs(amount):N2} ج.م";
+
+    private static string MapStatusText(string status) => status switch
+    {
+        "Completed" => "مكتمل",
+        "Expense" => "مصروف",
+        _ => "غير محدد"
+    };
+
+    private static string MapStatusClass(string status) => status switch
+    {
+        "Completed" => "text-success",
+        "Expense" => "text-secondary",
+        _ => "text-secondary"
+    };
+
+    private static string MonthNameAr(int month) => month switch
+    {
+        1 => "يناير",
+        2 => "فبراير",
+        3 => "مارس",
+        4 => "أبريل",
+        5 => "مايو",
+        6 => "يونيو",
+        7 => "يوليو",
+        8 => "أغسطس",
+        9 => "سبتمبر",
+        10 => "أكتوبر",
+        11 => "نوفمبر",
+        12 => "ديسمبر",
+        _ => month.ToString()
+    };
+}

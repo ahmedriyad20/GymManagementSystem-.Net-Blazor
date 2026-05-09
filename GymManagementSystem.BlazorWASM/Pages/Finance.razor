@@ -1,0 +1,295 @@
+﻿@page "/finance"
+@attribute [Authorize]
+@inject ApiClient ApiClient
+
+<div class="finance-page">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+        <div>
+            <h1 class="display-6 fw-bold mb-1">المدفوعات المتبقية</h1>
+            <p class="text-secondary mb-0">إدارة ومتابعة الأرصدة غير المسددة للمتدربين.</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" @onclick="LoadAsync">
+                <i class="bi bi-funnel ms-1"></i>
+                تصفية
+            </button>
+            <button class="btn btn-outline-secondary" @onclick="ExportCsv">
+                <i class="bi bi-download ms-1"></i>
+                تصدير
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-lg-4">
+            <div class="card border-0 shadow-sm finance-stat danger">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="fw-semibold">إجمالي المبالغ المستحقة</span>
+                        <i class="bi bi-exclamation-triangle text-danger"></i>
+                    </div>
+                    <div class="display-6 fw-bold text-danger mb-0">@TotalOutstanding.ToString("0.##") ج.م</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="card border-0 shadow-sm finance-stat">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="fw-semibold">عدد المتدربين المديونين</span>
+                        <i class="bi bi-people text-secondary"></i>
+                    </div>
+                    <div class="display-6 fw-bold mb-0">@rows.Count متدرب</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="card border-0 shadow-sm finance-stat primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="fw-semibold">تم تحصيله هذا الشهر</span>
+                        <i class="bi bi-wallet2 text-primary"></i>
+                    </div>
+                    <div class="display-6 fw-bold text-primary mb-0">@CollectedThisMonth.ToString("0.##") ج.م</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm trainees-table-card">
+        @if (loading)
+        {
+            <div class="p-4 text-secondary">جاري تحميل البيانات...</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle mb-0 trainees-table">
+                    <thead>
+                        <tr>
+                            <th>اسم المتدرب</th>
+                            <th>رقم الهاتف</th>
+                            <th>سعر الاشتراك الإجمالي</th>
+                            <th>المبلغ المدفوع</th>
+                            <th>الرصيد المتبقي</th>
+                            <th>إجراء</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (rows.Count == 0)
+                        {
+                            <tr><td colspan="6" class="text-center py-4 text-secondary">لا توجد مبالغ مستحقة حالياً</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var row in rows.Where(MatchesSearch).OrderByDescending(r => r.RemainingAmount))
+                            {
+                                <tr>
+                                    <td class="fw-semibold">@row.TraineeName</td>
+                                    <td>@row.Phone</td>
+                                    <td>@row.TotalAmount.ToString("0.##") ج.م</td>
+                                    <td class="text-primary">@row.PaidAmount.ToString("0.##") ج.م</td>
+                                    <td class="text-danger fw-semibold">@row.RemainingAmount.ToString("0.##") ج.م</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary" @onclick="() => OpenPaymentModal(row)">
+                                            ادفع قسط
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+            <span class="text-secondary">عرض @FilteredCount من @rows.Count متدرب</span>
+            <div class="d-flex gap-2">
+                <InputText class="form-control form-control-sm" @bind-Value="searchText" placeholder="بحث بالاسم أو الهاتف..." />
+                <button class="btn btn-sm btn-outline-secondary" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise"></i></button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="alert mt-3 @(message.Contains("بنجاح") ? "alert-success" : "alert-danger")">@message</div>
+    }
+</div>
+
+@if (isPaymentModalOpen && selectedRow is not null)
+{
+    <div class="finance-modal-backdrop" @onclick="ClosePaymentModal"></div>
+    <div class="finance-modal card border-0 shadow">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">دفع قسط</h5>
+            <button class="btn btn-sm btn-light" @onclick="ClosePaymentModal"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="card-body">
+            <div class="mb-2"><b>المتدرب:</b> @selectedRow.TraineeName</div>
+            <div class="mb-2"><b>الرصيد المتبقي:</b> <span class="text-danger fw-semibold">@selectedRow.RemainingAmount.ToString("0.##") ج.م</span></div>
+
+            <label class="form-label mt-2">المبلغ الذي سيتم دفعه</label>
+            <InputNumber class="form-control" @bind-Value="paymentAmount" />
+            <small class="text-secondary">بعد الدفع سيبقى: <b>@RemainingAfterPayment.ToString("0.##") ج.م</b></small>
+
+            @if (!string.IsNullOrWhiteSpace(modalError))
+            {
+                <div class="alert alert-danger mt-3 mb-0">@modalError</div>
+            }
+        </div>
+        <div class="card-footer bg-white d-flex justify-content-end gap-2">
+            <button class="btn btn-outline-secondary" @onclick="ClosePaymentModal" disabled="@processingPayment">إلغاء</button>
+            <button class="btn btn-primary" @onclick="ConfirmPaymentAsync" disabled="@processingPayment">
+                @(processingPayment ? "جاري الحفظ..." : "تأكيد الدفع")
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    private bool loading;
+    private string? searchText;
+    private string? message;
+    private decimal CollectedThisMonth;
+
+    private List<OutstandingRowVm> rows = [];
+    private decimal TotalOutstanding => rows.Sum(x => x.RemainingAmount);
+    private int FilteredCount => rows.Count(MatchesSearch);
+
+    private bool isPaymentModalOpen;
+    private bool processingPayment;
+    private string? modalError;
+    private decimal paymentAmount;
+    private OutstandingRowVm? selectedRow;
+    private decimal RemainingAfterPayment => selectedRow is null ? 0m : Math.Max(0m, selectedRow.RemainingAmount - paymentAmount);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        message = null;
+
+        try
+        {
+            var unpaidRows = await ApiClient.GetUnpaidInstallmentsAsync();
+            rows = await EnrichAsync(unpaidRows);
+
+            var now = DateTime.Now;
+            var earnings = await ApiClient.GetEarningsAsync(now.Year, now.Month);
+            CollectedThisMonth = earnings?.MonthlyEarnings ?? 0m;
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task<List<OutstandingRowVm>> EnrichAsync(List<UnpaidInstallmentResult> baseRows)
+    {
+        var tasks = baseRows.Select(async row =>
+        {
+            var trainee = await ApiClient.GetTraineeAsync(row.TraineeId);
+            var sub = trainee?.Subscriptions.FirstOrDefault(s => s.SubscriptionId == row.SubscriptionId);
+
+            var total = sub?.TotalAmount ?? 0m;
+            var remaining = row.RemainingAmount;
+            var paid = total > 0m ? Math.Max(0m, total - remaining) : 0m;
+
+            return new OutstandingRowVm
+            {
+                TraineeId = row.TraineeId,
+                TraineeName = row.TraineeName,
+                SubscriptionId = row.SubscriptionId,
+                Phone = trainee?.Phone ?? "-",
+                TotalAmount = total,
+                PaidAmount = paid,
+                RemainingAmount = remaining
+            };
+        });
+
+        return (await Task.WhenAll(tasks)).ToList();
+    }
+
+    private bool MatchesSearch(OutstandingRowVm row)
+    {
+        if (string.IsNullOrWhiteSpace(searchText)) return true;
+        return row.TraineeName.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+               || row.Phone.Contains(searchText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void OpenPaymentModal(OutstandingRowVm row)
+    {
+        selectedRow = row;
+        paymentAmount = row.RemainingAmount;
+        modalError = null;
+        processingPayment = false;
+        isPaymentModalOpen = true;
+    }
+
+    private void ClosePaymentModal()
+    {
+        isPaymentModalOpen = false;
+        processingPayment = false;
+        modalError = null;
+        selectedRow = null;
+        paymentAmount = 0m;
+    }
+
+    private async Task ConfirmPaymentAsync()
+    {
+        if (selectedRow is null) return;
+
+        modalError = null;
+        if (paymentAmount <= 0m)
+        {
+            modalError = "يرجى إدخال مبلغ أكبر من صفر.";
+            return;
+        }
+
+        if (paymentAmount > selectedRow.RemainingAmount)
+        {
+            modalError = "المبلغ المدفوع لا يمكن أن يتجاوز الرصيد المتبقي.";
+            return;
+        }
+
+        processingPayment = true;
+        try
+        {
+            await ApiClient.AddInstallmentAsync(selectedRow.SubscriptionId, paymentAmount);
+            message = "تم تسجيل القسط بنجاح.";
+            ClosePaymentModal();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            modalError = ex.Message;
+            processingPayment = false;
+        }
+    }
+
+    private void ExportCsv()
+    {
+        message = $"عدد الصفوف الجاهزة للتصدير: {FilteredCount}";
+    }
+
+    private class OutstandingRowVm
+    {
+        public Guid TraineeId { get; set; }
+        public string TraineeName { get; set; } = string.Empty;
+        public Guid SubscriptionId { get; set; }
+        public string Phone { get; set; } = "-";
+        public decimal TotalAmount { get; set; }
+        public decimal PaidAmount { get; set; }
+        public decimal RemainingAmount { get; set; }
+    }
+}

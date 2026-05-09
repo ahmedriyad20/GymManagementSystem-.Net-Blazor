@@ -1,0 +1,218 @@
+@page "/trainees/{TraineeId:guid}/edit"
+@attribute [Authorize]
+@inject ApiClient ApiClient
+@inject NavigationManager Navigation
+
+<div class="register-page">
+    <div class="register-header mb-4">
+        <h1 class="display-6 fw-bold mb-1">تعديل بيانات المتدرب</h1>
+        <p class="text-secondary mb-0">تحديث بيانات العضو بنفس نمط التسجيل</p>
+    </div>
+
+    @if (loading)
+    {
+        <div class="card border-0 shadow-sm register-section">
+            <div class="card-body p-4 text-secondary">جاري تحميل البيانات...</div>
+        </div>
+    }
+    else
+    {
+        <EditForm Model="form" OnValidSubmit="SaveAsync">
+            <DataAnnotationsValidator />
+
+            <section class="register-section card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h3 class="section-title">المعلومات الشخصية</h3>
+
+                    <div class="row g-4 align-items-stretch">
+                        <div class="col-lg-8">
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">الاسم الكامل</label>
+                                    <InputText class="form-control form-control-lg" @bind-Value="form.Name" placeholder="مثال: أحمد محمد" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">رقم الهاتف</label>
+                                    <InputText class="form-control form-control-lg" @bind-Value="form.Phone" placeholder="+966 50 000 0000" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">الجنس</label>
+                                    <InputSelect class="form-select form-select-lg" @bind-Value="form.Gender">
+                                        <option value="@enGender.Male">ذكر</option>
+                                        <option value="@enGender.Female">أنثى</option>
+                                    </InputSelect>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">تاريخ الميلاد</label>
+                                    <InputDate class="form-control form-control-lg" @bind-Value="form.DateOfBirth" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">حالة العضوية</label>
+                                    <div class="form-check form-switch mt-2">
+                                        <InputCheckbox class="form-check-input" @bind-Value="form.IsActive" />
+                                        <label class="form-check-label me-2">عضو نشط</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-4">
+                            <label class="photo-dropzone h-100" for="photoInput">
+                                <i class="bi bi-camera-fill fs-1"></i>
+                                <h6 class="mt-3 mb-1">تحديث الصورة</h6>
+                                <p class="mb-0 text-secondary">JPG أو PNG، بحد أقصى 2 ميجابايت</p>
+                                @if (!string.IsNullOrWhiteSpace(selectedPhotoName))
+                                {
+                                    <small class="text-success d-block mt-2">@selectedPhotoName</small>
+                                }
+                                else if (!string.IsNullOrWhiteSpace(currentPhotoPath))
+                                {
+                                    <img src="@GetPhotoUrl(currentPhotoPath)" alt="@form.Name" class="trainee-photo-large mt-2" />
+                                }
+                                else
+                                {
+                                    <small class="text-muted d-block mt-2">اضغط لاختيار الصورة</small>
+                                }
+                            </label>
+                            <InputFile id="photoInput" class="d-none" OnChange="OnPhotoChanged" accept=".jpg,.jpeg,.png,image/jpeg,image/png" />
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            @if (!string.IsNullOrWhiteSpace(message))
+            {
+                <div class="alert @(message.Contains("بنجاح") ? "alert-success" : "alert-danger")">@message</div>
+            }
+
+            <div class="d-flex gap-2 justify-content-start">
+                <button class="btn btn-primary btn-lg" type="submit" disabled="@saving">
+                    <i class="bi bi-check2-circle ms-1"></i>
+                    @((saving ? "جاري الحفظ..." : "حفظ التعديلات"))
+                </button>
+                <button class="btn btn-outline-secondary btn-lg" type="button" @onclick='() => Navigation.NavigateTo("/trainees")'>إلغاء</button>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid TraineeId { get; set; }
+
+    private EditFormModel form = new();
+    private bool loading = true;
+    private bool saving;
+    private string? message;
+    private IBrowserFile? selectedPhoto;
+    private string? selectedPhotoName;
+    private string? currentPhotoPath;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        message = null;
+
+        var trainee = await ApiClient.GetTraineeAsync(TraineeId);
+        if (trainee is null)
+        {
+            message = "لم يتم العثور على المتدرب.";
+            loading = false;
+            return;
+        }
+
+        form = new EditFormModel
+        {
+            Name = trainee.Name,
+            Phone = trainee.Phone,
+            DateOfBirth = trainee.DateOfBirth,
+            Gender = trainee.Gender.Equals("Female", StringComparison.OrdinalIgnoreCase) ? enGender.Female : enGender.Male,
+            IsActive = trainee.IsActive
+        };
+
+        currentPhotoPath = trainee.PhotoPath;
+        selectedPhoto = null;
+        selectedPhotoName = null;
+        loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        message = null;
+
+        try
+        {
+            await ApiClient.UpdateTraineeAsync(TraineeId, new UpdateTraineeCommand
+            {
+                Name = form.Name,
+                Phone = form.Phone,
+                DateOfBirth = form.DateOfBirth,
+                Gender = form.Gender,
+                IsActive = form.IsActive
+            }, selectedPhoto);
+
+            message = "تم تحديث بيانات المتدرب بنجاح.";
+            Navigation.NavigateTo($"/trainees/{TraineeId}");
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void OnPhotoChanged(InputFileChangeEventArgs e)
+    {
+        message = null;
+        selectedPhoto = null;
+        selectedPhotoName = null;
+
+        var file = e.File;
+        if (file is null)
+        {
+            return;
+        }
+
+        var ext = System.IO.Path.GetExtension(file.Name).ToLowerInvariant();
+        var isAllowedExt = ext is ".jpg" or ".jpeg" or ".png";
+        if (!isAllowedExt)
+        {
+            message = "صيغة الصورة غير مدعومة. استخدم JPG أو PNG.";
+            return;
+        }
+
+        if (file.Size > 2 * 1024 * 1024)
+        {
+            message = "حجم الصورة أكبر من 2 ميجابايت.";
+            return;
+        }
+
+        selectedPhoto = file;
+        selectedPhotoName = file.Name;
+    }
+
+    private string GetPhotoUrl(string photoPath)
+    {
+        if (string.IsNullOrWhiteSpace(photoPath)) return string.Empty;
+
+        if (Navigation.Uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+            photoPath.StartsWith("http://localhost:5053/", StringComparison.OrdinalIgnoreCase))
+        {
+            return photoPath.Replace("http://localhost:5053/", "https://localhost:7195/");
+        }
+
+        return photoPath;
+    }
+
+    private class EditFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public DateTime DateOfBirth { get; set; } = DateTime.Today.AddYears(-20);
+        public enGender Gender { get; set; } = enGender.Male;
+        public bool IsActive { get; set; } = true;
+    }
+}

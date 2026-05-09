@@ -84,7 +84,13 @@ namespace GymManagementSystem.Controllers
         [HttpPost("expenses")]
         public async Task<IActionResult> CreateExpense([FromBody] CreateExpenseCommand command)
         {
-            var expenseId = await gymManagementService.AddExpenseAsync(command);
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized(new { message = "User not authenticated." });
+            }
+
+            var expenseId = await gymManagementService.AddExpenseAsync(command, userId);
             return Ok(new { expenseId, message = "Expense added successfully." });
         }
 
@@ -138,6 +144,13 @@ namespace GymManagementSystem.Controllers
         public async Task<IActionResult> GetEarnings([FromQuery] int year, [FromQuery] int month)
         {
             var result = await gymManagementService.GetEarningsSummaryAsync(year, month);
+            return Ok(result);
+        }
+
+        [HttpGet("reports/earnings/dashboard")]
+        public async Task<IActionResult> GetEarningsDashboard([FromQuery] int year, [FromQuery] int month)
+        {
+            var result = await gymManagementService.GetEarningsDashboardAsync(year, month);
             return Ok(result);
         }
     }

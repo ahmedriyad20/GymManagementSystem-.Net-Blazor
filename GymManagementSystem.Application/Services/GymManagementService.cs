@@ -104,11 +104,20 @@ namespace GymManagementSystem.Services
             return true;
         }
 
-        public async Task<Guid> AddExpenseAsync(CreateExpenseCommand command)
+        public async Task<Guid> AddExpenseAsync(CreateExpenseCommand command, string currentUserId)
         {
+            var paidBy = command.PaidBy?.Trim();
+            if (string.IsNullOrWhiteSpace(paidBy))
+            {
+                paidBy = (await userManager.FindByIdAsync(currentUserId))?.UserName ?? "غير محدد";
+            }
+
             var expense = new Expense
             {
                 Description = command.Description,
+                Category = command.Category,
+                PaidBy = paidBy,
+                Notes = string.IsNullOrWhiteSpace(command.Notes) ? null : command.Notes.Trim(),
                 Amount = command.Amount,
                 ExpenseDate = command.ExpenseDate
             };
@@ -136,6 +145,9 @@ namespace GymManagementSystem.Services
             {
                 ExpenseId = e.Id,
                 Description = e.Description,
+                Category = e.Category,
+                PaidBy = e.PaidBy,
+                Notes = e.Notes,
                 Amount = e.Amount,
                 ExpenseDate = e.ExpenseDate
             }).ToList();
@@ -205,6 +217,93 @@ namespace GymManagementSystem.Services
             };
         }
 
+        public async Task<EarningsDashboardResult> GetEarningsDashboardAsync(int year, int month)
+        {
+            var subscriptions = await subscriptionRepository.GetAll()
+                .Include(s => s.Trainee)
+                .ToListAsync();
+            var expenses = await expenseRepository.GetAll().ToListAsync();
+
+            var totalEarnings = subscriptions.Sum(s => s.PaidAmount);
+            var monthlyEarnings = subscriptions
+                .Where(s => s.StartDate.Year == year && s.StartDate.Month == month)
+                .Sum(s => s.PaidAmount);
+
+            var currentMonthStart = new DateTime(year, month, 1);
+            var previousMonthStart = currentMonthStart.AddMonths(-1);
+            var currentYearStart = new DateTime(year, 1, 1);
+            var previousYearStart = currentYearStart.AddYears(-1);
+            var previousYearEnd = currentYearStart.AddDays(-1);
+
+            var previousMonthEarnings = subscriptions
+                .Where(s => s.StartDate.Year == previousMonthStart.Year && s.StartDate.Month == previousMonthStart.Month)
+                .Sum(s => s.PaidAmount);
+
+            var currentYearEarnings = subscriptions
+                .Where(s => s.StartDate >= currentYearStart && s.StartDate <= currentMonthStart.AddMonths(1).AddTicks(-1))
+                .Sum(s => s.PaidAmount);
+
+            var previousYearEarnings = subscriptions
+                .Where(s => s.StartDate >= previousYearStart && s.StartDate <= previousYearEnd)
+                .Sum(s => s.PaidAmount);
+
+            var now = DateTime.UtcNow.Date;
+            var activeSubscriptions = subscriptions.Count(s => s.EndDate.Date >= now);
+            var newSubscriptionsThisMonth = subscriptions.Count(s => s.StartDate.Year == year && s.StartDate.Month == month);
+
+            var monthlyTrend = Enumerable.Range(0, 5)
+                .Select(offset => currentMonthStart.AddMonths(-offset))
+                .OrderBy(d => d)
+                .Select(d => new EarningsTrendPointResult
+                {
+                    Year = d.Year,
+                    Month = d.Month,
+                    Amount = subscriptions
+                        .Where(s => s.StartDate.Year == d.Year && s.StartDate.Month == d.Month)
+                        .Sum(s => s.PaidAmount)
+                })
+                .ToList();
+
+            var subscriptionTransactions = subscriptions
+                .Where(s => s.PaidAmount > 0)
+                .Select(s => new RecentFinancialTransactionResult
+                {
+                    Date = s.StartDate,
+                    Name = s.Trainee?.Name ?? "مشترك",
+                    Description = $"{s.SubscriptionPlan} - {s.SubscriptionPeriod}",
+                    Amount = s.PaidAmount,
+                    Status = "Completed"
+                });
+
+            var expenseTransactions = expenses
+                .Select(e => new RecentFinancialTransactionResult
+                {
+                    Date = e.ExpenseDate,
+                    Name = string.IsNullOrWhiteSpace(e.PaidBy) ? "مصروف" : e.PaidBy,
+                    Description = string.IsNullOrWhiteSpace(e.Category) ? e.Description : e.Category,
+                    Amount = -e.Amount,
+                    Status = "Expense"
+                });
+
+            var recentTransactions = subscriptionTransactions
+                .Concat(expenseTransactions)
+                .OrderByDescending(x => x.Date)
+                .Take(5)
+                .ToList();
+
+            return new EarningsDashboardResult
+            {
+                TotalEarnings = totalEarnings,
+                MonthlyEarnings = monthlyEarnings,
+                ActiveSubscriptions = activeSubscriptions,
+                NewSubscriptionsThisMonth = newSubscriptionsThisMonth,
+                MonthOverMonthGrowthPercent = CalculateGrowthPercent(monthlyEarnings, previousMonthEarnings),
+                YearOverYearGrowthPercent = CalculateGrowthPercent(currentYearEarnings, previousYearEarnings),
+                MonthlyTrend = monthlyTrend,
+                RecentTransactions = recentTransactions
+            };
+        }
+
         private static DateTime CalculateEndDate(DateTime startDate, enSubscriptionPeriod period)
         {
             return period switch
@@ -246,6 +345,16 @@ namespace GymManagementSystem.Services
         {
             var user = await userManager.FindByIdAsync(currentUserId);
             return user is not null && user.Gender == enGender.Female;
+        }
+
+        private static decimal CalculateGrowthPercent(decimal current, decimal previous)
+        {
+            if (previous <= 0)
+            {
+                return current > 0 ? 100 : 0;
+            }
+
+            return ((current - previous) / previous) * 100;
         }
     }
 }

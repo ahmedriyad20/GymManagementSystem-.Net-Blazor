@@ -1,3 +1,58 @@
 ﻿@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject JwtAuthenticationStateProvider AuthStateProvider
 
-@Body
+<div class="lion-layout" dir="rtl">
+    <aside class="lion-sidebar">
+        <div class="lion-brand">
+            <div class="lion-brand-badge">LG</div>
+            <div>
+                <h5 class="mb-0">Lion Gym</h5>
+                <small>مسؤول المؤسسة</small>
+            </div>
+        </div>
+
+        <nav class="lion-nav">
+            <NavLink href="/" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> لوحة التحكم</NavLink>
+            <NavLink href="/trainees"><i class="bi bi-people"></i> المتدربين</NavLink>
+            <NavLink href="/finance"><i class="bi bi-cash-stack"></i> المالية</NavLink>
+            <NavLink href="/reports/expiring"><i class="bi bi-calendar2-week"></i> الاشتراكات</NavLink>
+            <NavLink href="/expenses"><i class="bi bi-credit-card"></i> المصاريف</NavLink>
+            <NavLink href="/earnings"><i class="bi bi-graph-up-arrow"></i> الأرباح</NavLink>
+        </nav>
+
+        <button class="btn btn-primary w-100 mt-auto mb-3" @onclick='() => Navigation.NavigateTo("/trainees/register")'>
+            <i class="bi bi-person-plus ms-1"></i>
+            إضافة عضو جديد
+        </button>
+
+        <div class="lion-footer-links">
+            <a href="#"><i class="bi bi-gear"></i> الإعدادات</a>
+            <button class="btn btn-link p-0 text-decoration-none" @onclick="LogoutAsync"><i class="bi bi-box-arrow-right"></i> تسجيل الخروج</button>
+        </div>
+    </aside>
+
+    <section class="lion-main">
+        <header class="lion-topbar">
+            <div class="d-flex align-items-center gap-2">
+                <span class="fw-bold text-primary">Lion Gym Manager</span>
+            </div>
+            <div class="lion-top-actions">
+                <button class="btn btn-light btn-sm"><i class="bi bi-bell"></i></button>
+                <button class="btn btn-light btn-sm"><i class="bi bi-question-circle"></i></button>
+            </div>
+        </header>
+
+        <main class="lion-content">
+            @Body
+        </main>
+    </section>
+</div>
+
+@code {
+    private async Task LogoutAsync()
+    {
+        await AuthStateProvider.MarkUserAsLoggedOutAsync();
+        Navigation.NavigateTo("/login", true);
+    }
+}

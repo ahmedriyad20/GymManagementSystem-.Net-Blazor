@@ -12,10 +12,11 @@ namespace GymManagementSystem.Interfaces
         Task<SubscriptionResult> CreateSubscriptionAsync(CreateSubscriptionCommand command, string currentUserId);
         Task<SubscriptionResult?> AddInstallmentAsync(Guid subscriptionId, AddInstallmentCommand command, string currentUserId);
         Task<bool> AddAttendanceSessionAsync(CreateAttendanceSessionCommand command, string currentUserId);
-        Task<Guid> AddExpenseAsync(CreateExpenseCommand command);
+        Task<Guid> AddExpenseAsync(CreateExpenseCommand command, string currentUserId);
         Task<List<ExpenseResult>> GetExpensesAsync(DateTime? fromDate, DateTime? toDate);
         Task<List<ExpiringSubscriptionResult>> GetExpiringSubscriptionsAsync(int days, string currentUserId);
         Task<List<UnpaidInstallmentResult>> GetUnpaidInstallmentsAsync(string currentUserId);
         Task<EarningsSummaryResult> GetEarningsSummaryAsync(int year, int month);
+        Task<EarningsDashboardResult> GetEarningsDashboardAsync(int year, int month);
     }
 }

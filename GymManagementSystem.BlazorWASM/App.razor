@@ -1,6 +1,33 @@
-﻿<Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
-    <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)"/>
-        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
-    </Found>
-</Router>
+@using System.Reflection
+
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            @if (IsAnonymousPage(routeData.PageType))
+            {
+                <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+            }
+            else
+            {
+                <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                    <NotAuthorized>
+                        <Pages.RedirectToLogin />
+                    </NotAuthorized>
+                </AuthorizeRouteView>
+            }
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <Pages.NotFound />
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>
+
+@code {
+    private static bool IsAnonymousPage(Type pageType)
+    {
+        return pageType.GetCustomAttributes(inherit: true).Any(a => a.GetType().Name == "AllowAnonymousAttribute");
+    }
+}

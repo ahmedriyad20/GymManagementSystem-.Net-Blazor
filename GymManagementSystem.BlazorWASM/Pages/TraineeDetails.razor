@@ -1,0 +1,138 @@
+@page "/trainees/{TraineeId:guid}"
+@attribute [Authorize]
+@inject ApiClient ApiClient
+@inject NavigationManager Navigation
+
+<div class="register-page details-page">
+    <div class="register-header mb-4 d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+            <h1 class="display-6 fw-bold mb-1">تفاصيل المتدرب</h1>
+            <p class="text-secondary mb-0">عرض بيانات العضو والاشتراكات الحالية والسابقة</p>
+        </div>
+        @if (trainee is not null)
+        {
+            <button class="btn btn-outline-primary" @onclick='() => Navigation.NavigateTo($"/trainees/{TraineeId}/edit")'>
+                <i class="bi bi-pencil-square ms-1"></i>
+                تعديل البيانات
+            </button>
+        }
+    </div>
+
+    @if (trainee is null)
+    {
+        <div class="card border-0 shadow-sm register-section">
+            <div class="card-body p-4 text-secondary">جاري التحميل...</div>
+        </div>
+    }
+    else
+    {
+        <section class="register-section card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h3 class="section-title">المعلومات الشخصية</h3>
+                <div class="row g-4 align-items-center">
+                    <div class="col-lg-2 col-md-3">
+                        @if (!string.IsNullOrWhiteSpace(trainee.PhotoPath))
+                        {
+                            <img src="@GetPhotoUrl(trainee.PhotoPath!)" alt="@trainee.Name" class="trainee-photo-hero" />
+                        }
+                        else
+                        {
+                            <div class="trainee-avatar trainee-avatar-hero">@GetInitials(trainee.Name)</div>
+                        }
+                    </div>
+                    <div class="col-lg-10 col-md-9">
+                        <div class="row g-3">
+                            <div class="col-md-6"><b>الاسم:</b> @trainee.Name</div>
+                            <div class="col-md-6"><b>الهاتف:</b> @trainee.Phone</div>
+                            <div class="col-md-6"><b>النوع:</b> @(trainee.Gender == "Female" ? "أنثى" : "ذكر")</div>
+                            <div class="col-md-6"><b>الحالة:</b> @(trainee.IsActive ? "نشط" : "غير نشط")</div>
+                            <div class="col-md-6"><b>تاريخ الميلاد:</b> @trainee.DateOfBirth.ToString("yyyy/MM/dd")</div>
+                            <div class="col-md-6"><b>تاريخ الإنشاء:</b> @trainee.CreationTime.ToString("yyyy/MM/dd")</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="register-section card border-0 shadow-sm">
+            <div class="card-body p-0">
+                <div class="p-4 pb-2">
+                    <h3 class="section-title mb-2">الاشتراكات</h3>
+                </div>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0 trainees-table">
+                        <thead>
+                            <tr>
+                                <th>الخطة</th>
+                                <th>المدة</th>
+                                <th>البداية</th>
+                                <th>النهاية</th>
+                                <th>المدفوع</th>
+                                <th>المتبقي</th>
+                                <th>عدد الجلسات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (trainee.Subscriptions.Count == 0)
+                            {
+                                <tr><td colspan="7" class="text-center py-4 text-secondary">لا توجد اشتراكات</td></tr>
+                            }
+                            else
+                            {
+                                @foreach (var sub in trainee.Subscriptions.OrderByDescending(s => s.EndDate))
+                                {
+                                    <tr>
+                                        <td>@sub.SubscriptionPlan</td>
+                                        <td>@sub.SubscriptionPeriod</td>
+                                        <td>@sub.StartDate.ToString("yyyy/MM/dd")</td>
+                                        <td>@sub.EndDate.ToString("yyyy/MM/dd")</td>
+                                        <td>@sub.PaidAmount</td>
+                                        <td>@sub.RemainingAmount</td>
+                                        <td>@SessionsForSubscription(sub)</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid TraineeId { get; set; }
+    private GetTraineeResult? trainee;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        trainee = await ApiClient.GetTraineeAsync(TraineeId);
+    }
+
+    private int SessionsForSubscription(TraineeSubscriptionView sub)
+    {
+        if (trainee is null) return 0;
+        return trainee.AttendanceSessions.Count(s => s >= sub.StartDate && s <= sub.EndDate);
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "LG";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpperInvariant();
+        return string.Concat(parts[0][0], parts[1][0]).ToUpperInvariant();
+    }
+
+    private string GetPhotoUrl(string photoPath)
+    {
+        if (string.IsNullOrWhiteSpace(photoPath)) return string.Empty;
+
+        if (Navigation.Uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+            photoPath.StartsWith("http://localhost:5053/", StringComparison.OrdinalIgnoreCase))
+        {
+            return photoPath.Replace("http://localhost:5053/", "https://localhost:7195/");
+        }
+
+        return photoPath;
+    }
+}

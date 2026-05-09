@@ -1,0 +1,243 @@
+@page "/reports/expiring"
+@attribute [Authorize]
+@inject ApiClient ApiClient
+@inject NavigationManager Navigation
+
+<div class="subscriptions-page">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+        <div>
+            <h1 class="display-6 fw-bold mb-1">اشتراكات قاربت الانتهاء</h1>
+            <p class="text-secondary mb-0">متابعة وتجديد الاشتراكات التي ستنتهي قريباً.</p>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-lg-4">
+            <div class="card border-0 shadow-sm subscriptions-stat danger">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="fw-semibold">تنتهي خلال 3 أيام</span>
+                        <i class="bi bi-exclamation-triangle-fill text-danger"></i>
+                    </div>
+                    <div class="d-flex align-items-end gap-2">
+                        <span class="display-6 fw-bold mb-0">@rows3Days.Count</span>
+                        <span class="text-danger-emphasis">متدرب</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="card border-0 shadow-sm subscriptions-stat warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="fw-semibold">تنتهي خلال 7 أيام</span>
+                        <i class="bi bi-clock-history text-warning"></i>
+                    </div>
+                    <div class="d-flex align-items-end gap-2">
+                        <span class="display-6 fw-bold mb-0">@rows7Days.Count</span>
+                        <span class="text-warning-emphasis">متدرب</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-12 col-lg-4">
+            <div class="card border-0 shadow-sm subscriptions-stat primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="fw-semibold">إيرادات التجديد المتوقعة</span>
+                        <i class="bi bi-wallet2 text-primary"></i>
+                    </div>
+                    <div class="d-flex align-items-end gap-2">
+                        <span class="display-6 fw-bold mb-0">@ExpectedRenewalRevenue.ToString("0.##")</span>
+                        <span class="text-secondary">ج.م</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm trainees-table-card">
+        <div class="subscriptions-tabs border-bottom px-3 pt-3 d-flex gap-4">
+            <button class="subscriptions-tab @(activeDays == 3 ? "active" : string.Empty)" @onclick='() => SetActiveDays(3)'>
+                3 أيام (@rows3Days.Count)
+            </button>
+            <button class="subscriptions-tab @(activeDays == 7 ? "active" : string.Empty)" @onclick='() => SetActiveDays(7)'>
+                7 أيام (@rows7Days.Count)
+            </button>
+        </div>
+
+        @if (loading)
+        {
+            <div class="p-4 text-secondary">جاري تحميل الاشتراكات...</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle mb-0 trainees-table">
+                    <thead>
+                        <tr>
+                            <th>المتدرب</th>
+                            <th>الباقة الحالية</th>
+                            <th>تاريخ الانتهاء</th>
+                            <th>أيام متبقية</th>
+                            <th>إجراء</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (ActiveRows.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-center py-4 text-secondary">لا توجد اشتراكات منتهية قريباً</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var row in ActiveRows.OrderBy(x => x.RemainingDays).ThenBy(x => x.EndDate))
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="trainee-avatar">@GetInitials(row.TraineeName)</div>
+                                            <div>
+                                                <div class="fw-semibold">@row.TraineeName</div>
+                                                <small class="text-secondary">@row.Phone</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>@row.PackageTitle</td>
+                                    <td>@row.EndDate.ToString("yyyy/MM/dd")</td>
+                                    <td>
+                                        <span class="badge @RemainingDaysBadgeClass(row.RemainingDays)">
+                                            @RemainingDaysText(row.RemainingDays)
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary" @onclick='() => Renew(row.TraineeId)'>
+                                            <i class="bi bi-arrow-repeat ms-1"></i>
+                                            تجديد
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+            <span class="text-secondary">عرض @ActiveRows.Count من @ActiveRows.Count إدخال</span>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private int activeDays = 3;
+    private bool loading;
+
+    private List<ExpiringSubscriptionVm> rows3Days = [];
+    private List<ExpiringSubscriptionVm> rows7Days = [];
+
+    private List<ExpiringSubscriptionVm> ActiveRows => activeDays == 3 ? rows3Days : rows7Days;
+    private decimal ExpectedRenewalRevenue => ActiveRows.Sum(x => x.ExpectedAmount);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var rawQuery = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var part in rawQuery)
+        {
+            var pair = part.Split('=', 2);
+            if (pair.Length == 2 && pair[0].Equals("days", StringComparison.OrdinalIgnoreCase) && int.TryParse(Uri.UnescapeDataString(pair[1]), out var parsed) && parsed is 3 or 7)
+            {
+                activeDays = parsed;
+                break;
+            }
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            var rows3Raw = await ApiClient.GetExpiringSubscriptionsByDaysAsync(3);
+            var rows7Raw = await ApiClient.GetExpiringSubscriptionsByDaysAsync(7);
+
+            rows3Days = await EnrichRowsAsync(rows3Raw);
+            rows7Days = await EnrichRowsAsync(rows7Raw);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task<List<ExpiringSubscriptionVm>> EnrichRowsAsync(List<ExpiringSubscriptionResult> rows)
+    {
+        var tasks = rows.Select(async row =>
+        {
+            var trainee = await ApiClient.GetTraineeAsync(row.TraineeId);
+            var sub = trainee?.Subscriptions.FirstOrDefault(s => s.SubscriptionId == row.SubscriptionId)
+                      ?? trainee?.Subscriptions.OrderByDescending(s => s.EndDate).FirstOrDefault();
+
+            return new ExpiringSubscriptionVm
+            {
+                TraineeId = row.TraineeId,
+                TraineeName = row.TraineeName,
+                EndDate = row.EndDate,
+                RemainingDays = row.RemainingDays,
+                Phone = trainee?.Phone ?? "-",
+                PackageTitle = sub is null ? "-" : $"{sub.SubscriptionPlan} - {sub.SubscriptionPeriod}",
+                ExpectedAmount = sub?.TotalAmount ?? 0m
+            };
+        });
+
+        return (await Task.WhenAll(tasks)).ToList();
+    }
+
+    private void SetActiveDays(int days)
+    {
+        activeDays = days;
+    }
+
+    private void Renew(Guid traineeId)
+    {
+        Navigation.NavigateTo($"/trainees/{traineeId}");
+    }
+
+    private static string RemainingDaysBadgeClass(int remainingDays)
+    {
+        if (remainingDays <= 2) return "text-bg-danger-subtle text-danger border border-danger-subtle";
+        if (remainingDays <= 3) return "text-bg-warning-subtle text-warning border border-warning-subtle";
+        return "text-bg-primary-subtle text-primary border border-primary-subtle";
+    }
+
+    private static string RemainingDaysText(int remainingDays)
+    {
+        if (remainingDays <= 0) return "منتهٍ";
+        if (remainingDays == 1) return "يوم واحد";
+        if (remainingDays == 2) return "يومان";
+        return $"{remainingDays} أيام";
+    }
+
+    private static string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "LG";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpperInvariant();
+        return string.Concat(parts[0][0], parts[1][0]).ToUpperInvariant();
+    }
+
+    private class ExpiringSubscriptionVm
+    {
+        public Guid TraineeId { get; set; }
+        public string TraineeName { get; set; } = string.Empty;
+        public string Phone { get; set; } = "-";
+        public string PackageTitle { get; set; } = "-";
+        public DateTime EndDate { get; set; }
+        public int RemainingDays { get; set; }
+        public decimal ExpectedAmount { get; set; }
+    }
+}

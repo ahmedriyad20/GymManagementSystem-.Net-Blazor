@@ -1,0 +1,233 @@
+﻿@page "/trainees"
+@attribute [Authorize]
+@inject ApiClient ApiClient
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+
+<div class="trainees-page">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+        <div>
+            <h1 class="display-6 fw-bold mb-1">سجل المتدربين</h1>
+            <p class="text-secondary mb-0">إدارة @trainees.Count عضواً وفق صلاحيات حسابك</p>
+        </div>
+        <button class="btn btn-primary" @onclick='() => Navigation.NavigateTo("/trainees/register")'>
+            <i class="bi bi-person-plus ms-1"></i>
+            إضافة متدرب
+        </button>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body d-flex flex-wrap align-items-center gap-2">
+            <div class="input-group trainees-search">
+                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                <InputText class="form-control" @bind-Value="searchText" placeholder="البحث عن متدرب..." />
+            </div>
+
+            <InputSelect class="form-select trainees-filter" @bind-Value="selectedGender" disabled="@isFemaleOnlyScope">
+                <option value="">جميع الأجناس</option>
+                <option value="Male">ذكر</option>
+                <option value="Female">أنثى</option>
+            </InputSelect>
+
+            <button class="btn btn-outline-primary" @onclick="LoadAsync">تصفية</button>
+
+            @if (isFemaleOnlyScope)
+            {
+                <span class="badge text-bg-info">حساب نسائي: عرض المتدربات فقط</span>
+            }
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm trainees-table-card">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0 trainees-table">
+                <thead>
+                    <tr>
+                        <th>الصورة</th>
+                        <th>الاسم</th>
+                        <th>الهاتف</th>
+                        <th>الجنس</th>
+                        <th>الاشتراك</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (trainees.Count == 0)
+                    {
+                        <tr><td colspan="6" class="text-center py-4 text-secondary">لا توجد بيانات</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var trainee in trainees)
+                        {
+                            <tr>
+                                <td>
+                                    @if (!string.IsNullOrWhiteSpace(trainee.PhotoPath))
+                                    {
+                                        <img src="@GetPhotoUrl(trainee.PhotoPath)" alt="@trainee.Name" class="trainee-photo" />
+                                    }
+                                    else
+                                    {
+                                        <div class="trainee-avatar">@GetInitials(trainee.Name)</div>
+                                    }
+                                </td>
+                                <td class="fw-semibold">@trainee.Name</td>
+                                <td>@trainee.Phone</td>
+                                <td>@(trainee.Gender == "Female" ? "أنثى" : "ذكر")</td>
+                                <td>
+                                    @if (IsActive(trainee))
+                                    {
+                                        <span class="badge text-bg-success-subtle text-success border border-success-subtle">نشط</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge text-bg-danger-subtle text-danger border border-danger-subtle">غير نشط</span>
+                                    }
+                                </td>
+                                <td class="position-relative">
+                                    <button class="btn btn-sm btn-light" @onclick="() => ToggleRowMenu(trainee.TraineeId)">
+                                        <i class="bi bi-three-dots-vertical"></i>
+                                    </button>
+
+                                    @if (openedMenuTraineeId == trainee.TraineeId)
+                                    {
+                                        <div class="trainee-menu card shadow-sm">
+                                            <button class="dropdown-item" @onclick='() => OpenDetails(trainee.TraineeId)'><i class="bi bi-eye ms-2"></i>عرض التفاصيل</button>
+                                            <button class="dropdown-item" @onclick='() => OpenEdit(trainee.TraineeId)'><i class="bi bi-pencil-square ms-2"></i>تعديل المتدرب</button>
+                                            <div class="dropdown-divider"></div>
+                                            <button class="dropdown-item" @onclick="IncreaseSessionAsync"><i class="bi bi-plus-circle ms-2"></i>زيادة الجلسة</button>
+                                            <button class="dropdown-item" @onclick='() => Navigation.NavigateTo("/payments/outstanding")'><i class="bi bi-credit-card ms-2"></i>معالجة الدفع</button>
+                                            <div class="dropdown-divider"></div>
+                                            <button class="dropdown-item text-danger" @onclick="CloseContextMenu"><i class="bi bi-slash-circle ms-2"></i>تعطيل العضو</button>
+                                        </div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+            <span class="text-secondary">عرض @trainees.Count من @trainees.Count إدخال</span>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<GetAllTraineesResult> trainees = [];
+    private string? searchText;
+    private string? selectedGender;
+    private Guid? openedMenuTraineeId;
+    private bool isFemaleOnlyScope;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await DetectFemaleOnlyScopeAsync();
+        await LoadAsync();
+    }
+
+    private async Task DetectFemaleOnlyScopeAsync()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        var claims = state.User.Claims.Select(c => c.Value.ToLowerInvariant()).ToList();
+        isFemaleOnlyScope = claims.Any(v => v.Contains("female") || v.Contains("women") || v.Contains("ladies") || v.Contains("انث"));
+        if (isFemaleOnlyScope)
+        {
+            selectedGender = "Female";
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        enGender? gender = selectedGender switch { "Male" => enGender.Male, "Female" => enGender.Female, _ => null };
+        trainees = await ApiClient.GetTraineesAsync(searchText, gender);
+
+        // Server remains source of truth: female-only accounts are filtered server-side.
+        if (isFemaleOnlyScope)
+        {
+            trainees = trainees.Where(t => t.Gender.Equals("Female", StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
+
+    private bool IsActive(GetAllTraineesResult trainee)
+    {
+        return trainee.CurrentSubscriptionEndDate.HasValue && trainee.CurrentSubscriptionEndDate.Value.Date >= DateTime.Today;
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "LG";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpperInvariant();
+        return string.Concat(parts[0][0], parts[1][0]).ToUpperInvariant();
+    }
+
+    private string GetPhotoUrl(string photoPath)
+    {
+        if (string.IsNullOrWhiteSpace(photoPath)) return string.Empty;
+
+        // If WASM is running on HTTPS and API returns HTTP image URLs, avoid mixed-content blocking.
+        if (Navigation.Uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+            photoPath.StartsWith("http://localhost:5053/", StringComparison.OrdinalIgnoreCase))
+        {
+            return photoPath.Replace("http://localhost:5053/", "https://localhost:7195/");
+        }
+
+        return photoPath;
+    }
+
+    private void ToggleRowMenu(Guid traineeId)
+    {
+        if (openedMenuTraineeId == traineeId)
+        {
+            openedMenuTraineeId = null;
+            return;
+        }
+
+        openedMenuTraineeId = traineeId;
+    }
+
+    private void CloseContextMenu() => openedMenuTraineeId = null;
+
+    private void OpenDetails(Guid traineeId)
+    {
+        CloseContextMenu();
+        Navigation.NavigateTo($"/trainees/{traineeId}");
+    }
+
+    private void OpenEdit(Guid traineeId)
+    {
+        CloseContextMenu();
+        Navigation.NavigateTo($"/trainees/{traineeId}/edit");
+    }
+
+    private async Task IncreaseSessionAsync()
+    {
+        if (!openedMenuTraineeId.HasValue) return;
+
+        var details = await ApiClient.GetTraineeAsync(openedMenuTraineeId.Value);
+        var currentSubscription = details?.Subscriptions
+            .Where(x => x.StartDate.Date <= DateTime.Today && x.EndDate.Date >= DateTime.Today)
+            .OrderByDescending(x => x.EndDate)
+            .FirstOrDefault();
+
+        if (details is null || currentSubscription is null)
+        {
+            CloseContextMenu();
+            return;
+        }
+
+        await ApiClient.AddAttendanceAsync(new CreateAttendanceSessionCommand
+        {
+            TraineeId = openedMenuTraineeId.Value,
+            SubscriptionId = currentSubscription.SubscriptionId,
+            SessionDateTime = DateTime.Now
+        });
+
+        CloseContextMenu();
+        await LoadAsync();
+    }
+}

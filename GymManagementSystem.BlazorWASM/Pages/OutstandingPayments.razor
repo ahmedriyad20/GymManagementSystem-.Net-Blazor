@@ -1,0 +1,61 @@
+@page "/payments/outstanding"
+@attribute [Authorize]
+@inject ApiClient ApiClient
+
+<h1>????????? ????????</h1>
+
+<table>
+    <thead><tr><th>???????</th><th>???????</th><th>???? ??????</th><th></th></tr></thead>
+    <tbody>
+        @foreach (var row in rows)
+        {
+            <tr>
+                <td>@row.TraineeName</td>
+                <td>@row.RemainingAmount</td>
+                <td>
+                    <input type="number"
+                           value="@GetInstallment(row.SubscriptionId)"
+                           @onchange="(e => OnInstallmentChanged(row.SubscriptionId, e.Value?.ToString()))" />
+                </td>
+                <td><button class="btn" @onclick="() => AddInstallmentAsync(row.SubscriptionId)">?????</button></td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<UnpaidInstallmentResult> rows = [];
+    private Dictionary<Guid, decimal> installmentAmounts = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        rows = await ApiClient.GetUnpaidInstallmentsAsync();
+        installmentAmounts = rows.ToDictionary(x => x.SubscriptionId, x => 0m);
+    }
+
+    private decimal GetInstallment(Guid subscriptionId)
+    {
+        return installmentAmounts.TryGetValue(subscriptionId, out var value) ? value : 0m;
+    }
+
+    private void OnInstallmentChanged(Guid subscriptionId, string? rawValue)
+    {
+        if (decimal.TryParse(rawValue, out var amount))
+        {
+            installmentAmounts[subscriptionId] = amount;
+        }
+        else
+        {
+            installmentAmounts[subscriptionId] = 0m;
+        }
+    }
+
+    private async Task AddInstallmentAsync(Guid subscriptionId)
+    {
+        if (!installmentAmounts.TryGetValue(subscriptionId, out var amount) || amount <= 0) return;
+        await ApiClient.AddInstallmentAsync(subscriptionId, amount);
+        await LoadAsync();
+    }
+}
