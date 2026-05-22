@@ -37,6 +37,50 @@ namespace GymManagementSystem.Controllers
             }
         }
 
+        [HttpPut("subscriptions/{subscriptionId:guid}")]
+        public async Task<IActionResult> UpdateSubscription(Guid subscriptionId, [FromBody] UpdateSubscriptionCommand command)
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized(new { message = "User not authenticated." });
+            }
+
+            try
+            {
+                var result = await gymManagementService.UpdateSubscriptionAsync(subscriptionId, command, userId);
+                return result is null ? NotFound(new { message = "Subscription not found." }) : Ok(result);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Forbid(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        [HttpPost("trainees/{traineeId:guid}/subscriptions/deactivate")]
+        public async Task<IActionResult> DeactivateActiveSubscription(Guid traineeId)
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized(new { message = "User not authenticated." });
+            }
+
+            try
+            {
+                var deactivated = await gymManagementService.DeactivateActiveSubscriptionAsync(traineeId, userId);
+                return deactivated ? Ok(new { message = "Subscription deactivated successfully." }) : NotFound(new { message = "Active subscription not found." });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Forbid(ex.Message);
+            }
+        }
+
         [HttpPost("subscriptions/{subscriptionId:guid}/installments")]
         public async Task<IActionResult> AddInstallment(Guid subscriptionId, [FromBody] AddInstallmentCommand command)
         {

@@ -1,34 +1,40 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 @inject NavigationManager Navigation
 @inject JwtAuthenticationStateProvider AuthStateProvider
 
-<div class="lion-layout" dir="rtl">
+<div class="lion-layout @(isSidebarCollapsed ? "sidebar-collapsed" : string.Empty)" dir="rtl">
     <aside class="lion-sidebar">
         <div class="lion-brand">
             <div class="lion-brand-badge">LG</div>
-            <div>
+            <div class="sidebar-label">
                 <h5 class="mb-0">Lion Gym</h5>
                 <small>مسؤول المؤسسة</small>
             </div>
+            <button class="btn btn-light btn-sm sidebar-toggle" type="button" @onclick="ToggleSidebar">
+                <i class="bi @(isSidebarCollapsed ? "bi-chevron-left" : "bi-chevron-right")"></i>
+            </button>
         </div>
 
         <nav class="lion-nav">
-            <NavLink href="/" Match="NavLinkMatch.All"><i class="bi bi-grid"></i> لوحة التحكم</NavLink>
-            <NavLink href="/trainees"><i class="bi bi-people"></i> المتدربين</NavLink>
-            <NavLink href="/finance"><i class="bi bi-cash-stack"></i> المالية</NavLink>
-            <NavLink href="/reports/expiring"><i class="bi bi-calendar2-week"></i> الاشتراكات</NavLink>
-            <NavLink href="/expenses"><i class="bi bi-credit-card"></i> المصاريف</NavLink>
-            <NavLink href="/earnings"><i class="bi bi-graph-up-arrow"></i> الأرباح</NavLink>
+            <NavLink href="/" Match="NavLinkMatch.All"><i class="bi bi-grid"></i><span class="sidebar-label">لوحة التحكم</span></NavLink>
+            <NavLink href="/trainees"><i class="bi bi-people"></i><span class="sidebar-label">المتدربين</span></NavLink>
+            <NavLink href="/finance"><i class="bi bi-cash-stack"></i><span class="sidebar-label">المالية</span></NavLink>
+            <NavLink href="/reports/expiring"><i class="bi bi-calendar2-week"></i><span class="sidebar-label">الاشتراكات</span></NavLink>
+            <NavLink href="/expenses"><i class="bi bi-credit-card"></i><span class="sidebar-label">المصاريف</span></NavLink>
+            @if (!isFemaleOnlyScope)
+            {
+                <NavLink href="/earnings"><i class="bi bi-graph-up-arrow"></i><span class="sidebar-label">الأرباح</span></NavLink>
+            }
         </nav>
 
         <button class="btn btn-primary w-100 mt-auto mb-3" @onclick='() => Navigation.NavigateTo("/trainees/register")'>
             <i class="bi bi-person-plus ms-1"></i>
-            إضافة عضو جديد
+            <span class="sidebar-label">إضافة عضو جديد</span>
         </button>
 
         <div class="lion-footer-links">
-            <a href="#"><i class="bi bi-gear"></i> الإعدادات</a>
-            <button class="btn btn-link p-0 text-decoration-none" @onclick="LogoutAsync"><i class="bi bi-box-arrow-right"></i> تسجيل الخروج</button>
+            <a href="#"><i class="bi bi-gear"></i><span class="sidebar-label">الإعدادات</span></a>
+            <button class="btn btn-link p-0 text-decoration-none" @onclick="LogoutAsync"><i class="bi bi-box-arrow-right"></i><span class="sidebar-label">تسجيل الخروج</span></button>
         </div>
     </aside>
 
@@ -50,9 +56,27 @@
 </div>
 
 @code {
+    private bool isSidebarCollapsed;
+    private bool isFemaleOnlyScope;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo("/login", forceLoad: false, replace: true);
+            return;
+        }
+
+        var claims = state.User.Claims.Select(c => c.Value.ToLowerInvariant()).ToList();
+        isFemaleOnlyScope = claims.Any(v => v.Contains("female") || v.Contains("women") || v.Contains("ladies") || v.Contains("انث"));
+    }
+
+    private void ToggleSidebar() => isSidebarCollapsed = !isSidebarCollapsed;
+
     private async Task LogoutAsync()
     {
         await AuthStateProvider.MarkUserAsLoggedOutAsync();
-        Navigation.NavigateTo("/login", true);
+        Navigation.NavigateTo("/login", forceLoad: false, replace: true);
     }
 }

@@ -1,4 +1,4 @@
-@page "/trainees/{TraineeId:guid}/edit"
+﻿@page "/trainees/{TraineeId:guid}/edit"
 @attribute [Authorize]
 @inject ApiClient ApiClient
 @inject NavigationManager Navigation
@@ -6,7 +6,7 @@
 <div class="register-page">
     <div class="register-header mb-4">
         <h1 class="display-6 fw-bold mb-1">تعديل بيانات المتدرب</h1>
-        <p class="text-secondary mb-0">تحديث بيانات العضو بنفس نمط التسجيل</p>
+        <p class="text-secondary mb-0">تحديث بيانات العضو وإدارة الاشتراك من نفس الشاشة</p>
     </div>
 
     @if (loading)
@@ -80,6 +80,84 @@
                 </div>
             </section>
 
+            <section class="register-section card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h3 class="section-title">إدارة الاشتراك</h3>
+
+                    @if (!hasAnySubscription)
+                    {
+                        <div class="alert alert-info">هذا المتدرب لم يسبق له أي اشتراك.</div>
+                        <div class="form-check form-switch mb-3">
+                            <InputCheckbox class="form-check-input" @bind-Value="createSubscriptionForNoHistory" />
+                            <label class="form-check-label me-2">إنشاء اشتراك الآن</label>
+                        </div>
+                    }
+                    else if (activeSubscription is null)
+                    {
+                        <div class="alert alert-warning">لا يوجد اشتراك نشط حالياً لهذا المتدرب.</div>
+                        <div class="form-check form-switch mb-3">
+                            <InputCheckbox class="form-check-input" @bind-Value="createSubscriptionForInactive" />
+                            <label class="form-check-label me-2">إنشاء اشتراك جديد</label>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-success">يوجد اشتراك نشط حالياً ويمكنك تحديثه أو تعطيله.</div>
+                        <div class="d-flex flex-wrap gap-3 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="subscriptionAction" id="actionNone" value="None" checked='@(subscriptionAction == "None")' @onchange='() => SetSubscriptionAction("None")' />
+                                <label class="form-check-label" for="actionNone">بدون تعديل الاشتراك</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="subscriptionAction" id="actionUpdate" value="Update" checked='@(subscriptionAction == "Update")' @onchange='() => SetSubscriptionAction("Update")' />
+                                <label class="form-check-label" for="actionUpdate">تحديث الاشتراك</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="subscriptionAction" id="actionDeactivate" value="Deactivate" checked='@(subscriptionAction == "Deactivate")' @onchange='() => SetSubscriptionAction("Deactivate")' />
+                                <label class="form-check-label text-danger" for="actionDeactivate">تعطيل الاشتراك الحالي</label>
+                            </div>
+                        </div>
+                    }
+
+                    @if (ShouldShowSubscriptionInputs())
+                    {
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">خطة الاشتراك</label>
+                                <InputSelect class="form-select form-select-lg" @bind-Value="form.SubscriptionPlan">
+                                    <option value="@enSubscriptionPlan.Basic">Basic</option>
+                                    <option value="@enSubscriptionPlan.Cardio">Cardio</option>
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">المدة</label>
+                                <InputSelect class="form-select form-select-lg" @bind-Value="form.SubscriptionPeriod">
+                                    <option value="@enSubscriptionPeriod.Daily">Daily</option>
+                                    <option value="@enSubscriptionPeriod.Monthly">Monthly</option>
+                                    <option value="@enSubscriptionPeriod.SixMonths">SixMonths</option>
+                                    <option value="@enSubscriptionPeriod.Yearly">Yearly</option>
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">تاريخ بداية الاشتراك</label>
+                                <InputDate class="form-control form-control-lg" @bind-Value="form.SubscriptionStartDate" />
+                            </div>
+                        </div>
+
+                        <div class="row g-3 mt-1">
+                            <div class="col-md-6">
+                                <label class="form-label">المبلغ المدفوع</label>
+                                <InputNumber class="form-control form-control-lg" @bind-Value="form.PaidAmount" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">السعر الحالي</label>
+                                <input class="form-control form-control-lg" value='@ResolveTotalPrice().ToString("0.##")' disabled />
+                            </div>
+                        </div>
+                    }
+                </div>
+            </section>
+
             @if (!string.IsNullOrWhiteSpace(message))
             {
                 <div class="alert @(message.Contains("بنجاح") ? "alert-success" : "alert-danger")">@message</div>
@@ -96,10 +174,34 @@
     }
 </div>
 
+@if (isDeactivateConfirmOpen)
+{
+    <div class="finance-modal-backdrop" @onclick="CloseDeactivateConfirmation"></div>
+    <div class="finance-modal card border-0 shadow">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 text-danger">تأكيد تعطيل الاشتراك</h5>
+            <button class="btn btn-sm btn-light" type="button" @onclick="CloseDeactivateConfirmation">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        <div class="card-body">
+            <p class="mb-2">سيتم تعطيل الاشتراك النشط الحالي لهذا المتدرب.</p>
+            <p class="mb-0 text-secondary">يمكنك إنشاء اشتراك جديد لاحقاً من نفس الشاشة إذا احتجت ذلك.</p>
+        </div>
+        <div class="card-footer bg-white d-flex justify-content-end gap-2">
+            <button class="btn btn-outline-secondary" type="button" @onclick="CloseDeactivateConfirmation" disabled="@saving">إلغاء</button>
+            <button class="btn btn-danger" type="button" @onclick="ConfirmDeactivateAsync" disabled="@saving">
+                @(saving ? "جاري الحفظ..." : "تأكيد التعطيل")
+            </button>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public Guid TraineeId { get; set; }
 
     private EditFormModel form = new();
+    private List<GetAllSubscriptionPricesResult> prices = [];
     private bool loading = true;
     private bool saving;
     private string? message;
@@ -107,11 +209,21 @@
     private string? selectedPhotoName;
     private string? currentPhotoPath;
 
+    private TraineeSubscriptionView? activeSubscription;
+    private TraineeSubscriptionView? latestSubscription;
+    private bool hasAnySubscription;
+    private bool createSubscriptionForNoHistory;
+    private bool createSubscriptionForInactive;
+    private string subscriptionAction = "None";
+    private bool isDeactivateConfirmOpen;
+    private bool deactivateConfirmed;
+
     protected override async Task OnParametersSetAsync()
     {
         loading = true;
         message = null;
 
+        prices = await ApiClient.GetSubscriptionPricesAsync();
         var trainee = await ApiClient.GetTraineeAsync(TraineeId);
         if (trainee is null)
         {
@@ -129,14 +241,59 @@
             IsActive = trainee.IsActive
         };
 
+        hasAnySubscription = trainee.Subscriptions.Any();
+        latestSubscription = trainee.Subscriptions.OrderByDescending(s => s.EndDate).FirstOrDefault();
+        activeSubscription = trainee.Subscriptions
+            .Where(s => s.StartDate.Date <= DateTime.Today && s.EndDate.Date >= DateTime.Today)
+            .OrderByDescending(s => s.EndDate)
+            .FirstOrDefault();
+
+        if (activeSubscription is not null)
+        {
+            form.SubscriptionPlan = ParsePlan(activeSubscription.SubscriptionPlan);
+            form.SubscriptionPeriod = ParsePeriod(activeSubscription.SubscriptionPeriod);
+            form.SubscriptionStartDate = activeSubscription.StartDate;
+            form.PaidAmount = activeSubscription.PaidAmount;
+            subscriptionAction = "Update";
+        }
+        else if (latestSubscription is not null)
+        {
+            form.SubscriptionPlan = ParsePlan(latestSubscription.SubscriptionPlan);
+            form.SubscriptionPeriod = ParsePeriod(latestSubscription.SubscriptionPeriod);
+            form.SubscriptionStartDate = DateTime.Today;
+            form.PaidAmount = 0;
+            subscriptionAction = "None";
+        }
+
         currentPhotoPath = trainee.PhotoPath;
         selectedPhoto = null;
         selectedPhotoName = null;
         loading = false;
     }
 
+    private bool ShouldShowSubscriptionInputs()
+    {
+        if (!hasAnySubscription)
+        {
+            return createSubscriptionForNoHistory;
+        }
+
+        if (activeSubscription is null)
+        {
+            return createSubscriptionForInactive;
+        }
+
+        return subscriptionAction == "Update";
+    }
+
     private async Task SaveAsync()
     {
+        if (activeSubscription is not null && subscriptionAction == "Deactivate" && !deactivateConfirmed)
+        {
+            isDeactivateConfirmOpen = true;
+            return;
+        }
+
         saving = true;
         message = null;
 
@@ -151,6 +308,38 @@
                 IsActive = form.IsActive
             }, selectedPhoto);
 
+            if (!hasAnySubscription)
+            {
+                if (createSubscriptionForNoHistory)
+                {
+                    await CreateSubscriptionAsync();
+                }
+            }
+            else if (activeSubscription is null)
+            {
+                if (createSubscriptionForInactive)
+                {
+                    await CreateSubscriptionAsync();
+                }
+            }
+            else
+            {
+                if (subscriptionAction == "Update")
+                {
+                    await ApiClient.UpdateSubscriptionAsync(activeSubscription.SubscriptionId, new UpdateSubscriptionCommand
+                    {
+                        SubscriptionPlan = form.SubscriptionPlan,
+                        SubscriptionPeriod = form.SubscriptionPeriod,
+                        PaidAmount = form.PaidAmount,
+                        StartDate = form.SubscriptionStartDate
+                    });
+                }
+                else if (subscriptionAction == "Deactivate")
+                {
+                    await ApiClient.DeactivateActiveSubscriptionAsync(TraineeId);
+                }
+            }
+
             message = "تم تحديث بيانات المتدرب بنجاح.";
             Navigation.NavigateTo($"/trainees/{TraineeId}");
         }
@@ -160,8 +349,57 @@
         }
         finally
         {
+            deactivateConfirmed = false;
             saving = false;
         }
+    }
+
+    private void SetSubscriptionAction(string action)
+    {
+        subscriptionAction = action;
+        deactivateConfirmed = false;
+        isDeactivateConfirmOpen = false;
+    }
+
+    private void CloseDeactivateConfirmation()
+    {
+        isDeactivateConfirmOpen = false;
+        deactivateConfirmed = false;
+    }
+
+    private async Task ConfirmDeactivateAsync()
+    {
+        deactivateConfirmed = true;
+        isDeactivateConfirmOpen = false;
+        await SaveAsync();
+    }
+
+    private async Task CreateSubscriptionAsync()
+    {
+        await ApiClient.CreateSubscriptionAsync(new CreateSubscriptionCommand
+        {
+            TraineeId = TraineeId,
+            SubscriptionPlan = form.SubscriptionPlan,
+            SubscriptionPeriod = form.SubscriptionPeriod,
+            PaidAmount = form.PaidAmount,
+            StartDate = form.SubscriptionStartDate
+        });
+    }
+
+    private decimal ResolveTotalPrice()
+    {
+        var price = prices.FirstOrDefault(x => x.SubscriptionPlan == form.SubscriptionPlan.ToString() && x.SubscriptionPeriod == form.SubscriptionPeriod.ToString());
+        return price?.Price ?? 0m;
+    }
+
+    private static enSubscriptionPlan ParsePlan(string plan)
+    {
+        return Enum.TryParse<enSubscriptionPlan>(plan, true, out var parsed) ? parsed : enSubscriptionPlan.Basic;
+    }
+
+    private static enSubscriptionPeriod ParsePeriod(string period)
+    {
+        return Enum.TryParse<enSubscriptionPeriod>(period, true, out var parsed) ? parsed : enSubscriptionPeriod.Monthly;
     }
 
     private void OnPhotoChanged(InputFileChangeEventArgs e)
@@ -214,5 +452,9 @@
         public DateTime DateOfBirth { get; set; } = DateTime.Today.AddYears(-20);
         public enGender Gender { get; set; } = enGender.Male;
         public bool IsActive { get; set; } = true;
+        public enSubscriptionPlan SubscriptionPlan { get; set; } = enSubscriptionPlan.Basic;
+        public enSubscriptionPeriod SubscriptionPeriod { get; set; } = enSubscriptionPeriod.Monthly;
+        public DateTime SubscriptionStartDate { get; set; } = DateTime.Today;
+        public decimal PaidAmount { get; set; }
     }
 }

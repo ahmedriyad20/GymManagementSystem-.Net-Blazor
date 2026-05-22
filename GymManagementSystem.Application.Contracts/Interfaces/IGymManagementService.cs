@@ -10,6 +10,8 @@ namespace GymManagementSystem.Interfaces
     public interface IGymManagementService
     {
         Task<SubscriptionResult> CreateSubscriptionAsync(CreateSubscriptionCommand command, string currentUserId);
+        Task<SubscriptionResult?> UpdateSubscriptionAsync(Guid subscriptionId, UpdateSubscriptionCommand command, string currentUserId);
+        Task<bool> DeactivateActiveSubscriptionAsync(Guid traineeId, string currentUserId);
         Task<SubscriptionResult?> AddInstallmentAsync(Guid subscriptionId, AddInstallmentCommand command, string currentUserId);
         Task<bool> AddAttendanceSessionAsync(CreateAttendanceSessionCommand command, string currentUserId);
         Task<Guid> AddExpenseAsync(CreateExpenseCommand command, string currentUserId);

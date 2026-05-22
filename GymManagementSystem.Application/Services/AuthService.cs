@@ -1,4 +1,4 @@
-﻿using GymManagementSystem.DTOs.User.Commands;
+using GymManagementSystem.DTOs.User.Commands;
 using GymManagementSystem.DTOs.User.Results;
 using GymManagementSystem.Entities.Users;
 using GymManagementSystem.Enums;
@@ -330,7 +330,9 @@ namespace GymManagementSystem.Services
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.UserName ?? string.Empty), // Use UserName in Name claim
-                new Claim(ClaimTypes.Email, user.UserName ?? string.Empty)
+                new Claim(ClaimTypes.Email, user.UserName ?? string.Empty),
+                new Claim(ClaimTypes.Gender, user.Gender.ToString()),
+                new Claim("gender", user.Gender.ToString())
             };
 
             //Add all User Roles to the UserClaims

@@ -1,6 +1,8 @@
-﻿@page "/earnings"
+@page "/earnings"
 @attribute [Authorize]
 @inject ApiClient ApiClient
+@inject JwtAuthenticationStateProvider AuthProvider
+@inject NavigationManager Navigation
 
 <div class="earnings-page">
     <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
@@ -152,6 +154,15 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var state = await AuthProvider.GetAuthenticationStateAsync();
+        var claims = state.User.Claims.Select(c => c.Value.ToLowerInvariant()).ToList();
+        var isFemaleOnlyScope = claims.Any(v => v.Contains("female") || v.Contains("women") || v.Contains("ladies") || v.Contains("انث"));
+        if (isFemaleOnlyScope)
+        {
+            Navigation.NavigateTo("/trainees", replace: true);
+            return;
+        }
+
         await LoadAsync();
     }
 

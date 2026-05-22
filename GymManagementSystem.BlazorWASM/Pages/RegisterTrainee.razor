@@ -1,4 +1,4 @@
-﻿@page "/trainees/register"
+@page "/trainees/register"
 @attribute [Authorize]
 @inject ApiClient ApiClient
 @inject NavigationManager Navigation
@@ -62,20 +62,31 @@
         </section>
 
         <section class="register-section card border-0 shadow-sm mb-4">
+            <div class="card-body p-4 pb-0">
+                <div class="form-check form-switch mb-3">
+                    <InputCheckbox class="form-check-input" @bind-Value="form.CreateSubscription" />
+                    <label class="form-check-label me-2">إنشاء اشتراك الآن</label>
+                </div>
+            </div>
+        </section>
+
+        @if (form.CreateSubscription)
+        {
+            <section class="register-section card border-0 shadow-sm mb-4">
             <div class="card-body p-4">
                 <h3 class="section-title">تفاصيل الاشتراك</h3>
 
                 <div class="row g-3">
                     <div class="col-md-4">
                         <label class="form-label">خطة الاشتراك</label>
-                        <InputSelect class="form-select form-select-lg" @bind-Value="form.SubscriptionPlan">
+                        <InputSelect class="form-select form-select-lg" @bind-Value="form.SubscriptionPlan" @bind-Value:after="OnSubscriptionDetailsChanged">
                             <option value="@enSubscriptionPlan.Basic">Basic</option>
                             <option value="@enSubscriptionPlan.Cardio">Cardio</option>
                         </InputSelect>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">المدة</label>
-                        <InputSelect class="form-select form-select-lg" @bind-Value="form.SubscriptionPeriod">
+                        <InputSelect class="form-select form-select-lg" @bind-Value="form.SubscriptionPeriod" @bind-Value:after="OnSubscriptionDetailsChanged">
                             <option value="@enSubscriptionPeriod.Daily">Daily</option>
                             <option value="@enSubscriptionPeriod.Monthly">Monthly</option>
                             <option value="@enSubscriptionPeriod.SixMonths">SixMonths</option>
@@ -95,29 +106,30 @@
                     </div>
                 }
             </div>
-        </section>
+            </section>
 
-        <section class="register-section card border-0 shadow-sm mb-4">
+            <section class="register-section card border-0 shadow-sm mb-4">
             <div class="card-body p-4">
                 <h3 class="section-title">الدفع</h3>
 
                 <div class="form-check form-switch mb-3">
-                    <InputCheckbox class="form-check-input" @bind-Value="form.IsFullyPaid" />
+                    <InputCheckbox class="form-check-input" @bind-Value="form.IsFullyPaid" @bind-Value:after="OnSubscriptionDetailsChanged" />
                     <label class="form-check-label me-2">تم الدفع بالكامل</label>
                 </div>
 
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label">المبلغ المدفوع</label>
-                        <InputNumber class="form-control form-control-lg" @bind-Value="form.PaidAmount" />
+                        <InputNumber class="form-control form-control-lg" @bind-Value="form.PaidAmount" @bind-Value:after="OnPaidAmountChanged" />
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">الرصيد المتبقي</label>
-                        <InputNumber class="form-control form-control-lg" @bind-Value="form.RemainingAmount" disabled="@form.IsFullyPaid" />
+                        <InputNumber class="form-control form-control-lg" @bind-Value="form.RemainingAmount" @bind-Value:after="OnRemainingAmountChanged" disabled="@form.IsFullyPaid" />
                     </div>
                 </div>
             </div>
-        </section>
+            </section>
+        }
 
         @if (!string.IsNullOrWhiteSpace(message))
         {
@@ -145,7 +157,7 @@
     protected override async Task OnInitializedAsync()
     {
         prices = await ApiClient.GetSubscriptionPricesAsync();
-        form.PaidAmount = ResolveTotalPrice();
+        OnSubscriptionDetailsChanged();
     }
 
     private async Task SaveAsync()
@@ -174,14 +186,17 @@
                 Gender = form.Gender
             }, selectedPhoto);
 
-            await ApiClient.CreateSubscriptionAsync(new CreateSubscriptionCommand
+            if (form.CreateSubscription)
             {
-                TraineeId = traineeId,
-                SubscriptionPlan = form.SubscriptionPlan,
-                SubscriptionPeriod = form.SubscriptionPeriod,
-                PaidAmount = form.PaidAmount,
-                StartDate = form.StartDate
-            });
+                await ApiClient.CreateSubscriptionAsync(new CreateSubscriptionCommand
+                {
+                    TraineeId = traineeId,
+                    SubscriptionPlan = form.SubscriptionPlan,
+                    SubscriptionPeriod = form.SubscriptionPeriod,
+                    PaidAmount = form.PaidAmount,
+                    StartDate = form.StartDate
+                });
+            }
 
             message = "تم تسجيل المتدرب بنجاح.";
             form = new RegistrationForm();
@@ -202,6 +217,58 @@
     {
         var price = prices.FirstOrDefault(x => x.SubscriptionPlan == form.SubscriptionPlan.ToString() && x.SubscriptionPeriod == form.SubscriptionPeriod.ToString());
         return price?.Price ?? 0m;
+    }
+
+    private void OnSubscriptionDetailsChanged()
+    {
+        var total = ResolveTotalPrice();
+        if (form.IsFullyPaid)
+        {
+            form.PaidAmount = total;
+            form.RemainingAmount = 0;
+        }
+        else
+        {
+            form.RemainingAmount = Math.Max(0, total - form.PaidAmount);
+        }
+    }
+
+    private void OnPaidAmountChanged()
+    {
+        var total = ResolveTotalPrice();
+        if (form.PaidAmount >= total)
+        {
+            form.PaidAmount = total;
+            form.IsFullyPaid = true;
+            form.RemainingAmount = 0;
+        }
+        else
+        {
+            form.IsFullyPaid = false;
+            form.RemainingAmount = total - form.PaidAmount;
+        }
+    }
+
+    private void OnRemainingAmountChanged()
+    {
+        var total = ResolveTotalPrice();
+        if (form.RemainingAmount >= total)
+        {
+            form.RemainingAmount = total;
+            form.PaidAmount = 0;
+            form.IsFullyPaid = false;
+        }
+        else if (form.RemainingAmount <= 0)
+        {
+            form.RemainingAmount = 0;
+            form.PaidAmount = total;
+            form.IsFullyPaid = true;
+        }
+        else
+        {
+            form.IsFullyPaid = false;
+            form.PaidAmount = total - form.RemainingAmount;
+        }
     }
 
     private void OnPhotoChanged(InputFileChangeEventArgs e)
@@ -240,6 +307,7 @@
         public string Phone { get; set; } = string.Empty;
         public DateTime DateOfBirth { get; set; } = DateTime.Today.AddYears(-20);
         public enGender Gender { get; set; } = enGender.Male;
+        public bool CreateSubscription { get; set; } = true;
         public enSubscriptionPlan SubscriptionPlan { get; set; } = enSubscriptionPlan.Basic;
         public enSubscriptionPeriod SubscriptionPeriod { get; set; } = enSubscriptionPeriod.Monthly;
         public DateTime StartDate { get; set; } = DateTime.Today;

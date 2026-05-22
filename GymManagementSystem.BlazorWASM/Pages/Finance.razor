@@ -1,6 +1,7 @@
-﻿@page "/finance"
+@page "/finance"
 @attribute [Authorize]
 @inject ApiClient ApiClient
+@inject JwtAuthenticationStateProvider AuthStateProvider
 
 <div class="finance-page">
     <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
@@ -21,7 +22,7 @@
     </div>
 
     <div class="row g-3 mb-4">
-        <div class="col-12 col-lg-4">
+        <div class="@(isFemaleOnlyScope ? "col-12 col-lg-6" : "col-12 col-lg-4")">
             <div class="card border-0 shadow-sm finance-stat danger">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-2">
@@ -32,7 +33,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-12 col-lg-4">
+        <div class="@(isFemaleOnlyScope ? "col-12 col-lg-6" : "col-12 col-lg-4")">
             <div class="card border-0 shadow-sm finance-stat">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-2">
@@ -43,17 +44,20 @@
                 </div>
             </div>
         </div>
-        <div class="col-12 col-lg-4">
-            <div class="card border-0 shadow-sm finance-stat primary">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <span class="fw-semibold">تم تحصيله هذا الشهر</span>
-                        <i class="bi bi-wallet2 text-primary"></i>
+        @if (!isFemaleOnlyScope)
+        {
+            <div class="col-12 col-lg-4">
+                <div class="card border-0 shadow-sm finance-stat primary">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <span class="fw-semibold">تم تحصيله هذا الشهر</span>
+                            <i class="bi bi-wallet2 text-primary"></i>
+                        </div>
+                        <div class="display-6 fw-bold text-primary mb-0">@CollectedThisMonth.ToString("0.##") ج.م</div>
                     </div>
-                    <div class="display-6 fw-bold text-primary mb-0">@CollectedThisMonth.ToString("0.##") ج.م</div>
                 </div>
             </div>
-        </div>
+        }
     </div>
 
     <div class="card border-0 shadow-sm trainees-table-card">
@@ -153,6 +157,7 @@
     private string? searchText;
     private string? message;
     private decimal CollectedThisMonth;
+    private bool isFemaleOnlyScope;
 
     private List<OutstandingRowVm> rows = [];
     private decimal TotalOutstanding => rows.Sum(x => x.RemainingAmount);
@@ -167,6 +172,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        var claims = state.User.Claims.Select(c => c.Value.ToLowerInvariant()).ToList();
+        isFemaleOnlyScope = claims.Any(v => v.Contains("female") || v.Contains("women") || v.Contains("ladies") || v.Contains("انث"));
         await LoadAsync();
     }
 
@@ -178,7 +186,16 @@
         try
         {
             var unpaidRows = await ApiClient.GetUnpaidInstallmentsAsync();
-            rows = await EnrichAsync(unpaidRows);
+            var enriched = await EnrichAsync(unpaidRows);
+
+            if (isFemaleOnlyScope)
+            {
+                rows = enriched.Where(r => r.Gender.Equals("Female", StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+            else
+            {
+                rows = enriched;
+            }
 
             var now = DateTime.Now;
             var earnings = await ApiClient.GetEarningsAsync(now.Year, now.Month);
@@ -213,7 +230,8 @@
                 Phone = trainee?.Phone ?? "-",
                 TotalAmount = total,
                 PaidAmount = paid,
-                RemainingAmount = remaining
+                RemainingAmount = remaining,
+                Gender = trainee?.Gender ?? string.Empty
             };
         });
 
@@ -291,5 +309,6 @@
         public decimal TotalAmount { get; set; }
         public decimal PaidAmount { get; set; }
         public decimal RemainingAmount { get; set; }
+        public string Gender { get; set; } = string.Empty;
     }
 }

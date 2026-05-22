@@ -8,6 +8,9 @@ namespace GymManagementSystem.DTOs.Trainee.Results
         public string Gender { get; set; } = string.Empty;
         public string? PhotoPath { get; set; }
         public DateTime? CurrentSubscriptionEndDate { get; set; }
+        public string? CurrentSubscriptionPlan { get; set; }
+        public string? CurrentSubscriptionPeriod { get; set; }
+        public decimal? CurrentPaidAmount { get; set; }
         public decimal? RemainingAmount { get; set; }
         public DateTime CreationTime { get; set; }
     }

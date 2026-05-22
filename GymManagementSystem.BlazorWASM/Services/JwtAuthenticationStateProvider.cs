@@ -23,7 +23,14 @@ public class JwtAuthenticationStateProvider(HttpClient httpClient, IJSRuntime js
 
         try
         {
-            var identity = new ClaimsIdentity(ParseClaimsFromJwt(token), "jwt");
+            var claims = ParseClaimsFromJwt(token).ToList();
+            if (IsExpired(claims))
+            {
+                await MarkUserAsLoggedOutAsync();
+                return new AuthenticationState(Anonymous);
+            }
+
+            var identity = new ClaimsIdentity(claims, "jwt");
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
             return new AuthenticationState(new ClaimsPrincipal(identity));
         }
@@ -56,6 +63,18 @@ public class JwtAuthenticationStateProvider(HttpClient httpClient, IJSRuntime js
     }
 
     public async Task<string?> GetAccessTokenAsync() => await jsRuntime.InvokeAsync<string?>("localStorage.getItem", AccessTokenKey);
+
+    private static bool IsExpired(IReadOnlyCollection<Claim> claims)
+    {
+        var expClaim = claims.FirstOrDefault(x => x.Type == "exp")?.Value;
+        if (!long.TryParse(expClaim, out var expUnix))
+        {
+            return true;
+        }
+
+        var expirationUtc = DateTimeOffset.FromUnixTimeSeconds(expUnix);
+        return expirationUtc <= DateTimeOffset.UtcNow;
+    }
 
     private static IEnumerable<Claim> ParseClaimsFromJwt(string jwt)
     {

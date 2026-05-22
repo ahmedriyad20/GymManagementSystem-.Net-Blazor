@@ -1,8 +1,9 @@
-﻿@page "/trainees"
+@page "/trainees"
 @attribute [Authorize]
 @inject ApiClient ApiClient
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JSRuntime
 
 <div class="trainees-page">
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
@@ -20,14 +21,14 @@
         <div class="card-body d-flex flex-wrap align-items-center gap-2">
             <div class="input-group trainees-search">
                 <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                <InputText class="form-control" @bind-Value="searchText" placeholder="البحث عن متدرب..." />
+                <input class="form-control" @bind="searchText" @bind:event="oninput" @onkeyup="OnSearchKeyUp" placeholder="البحث عن متدرب..." />
             </div>
 
-            <InputSelect class="form-select trainees-filter" @bind-Value="selectedGender" disabled="@isFemaleOnlyScope">
+            <select class="form-select trainees-filter" @bind="selectedGender" @bind:after="LoadAsync" disabled="@isFemaleOnlyScope">
                 <option value="">جميع الأجناس</option>
                 <option value="Male">ذكر</option>
                 <option value="Female">أنثى</option>
-            </InputSelect>
+            </select>
 
             <button class="btn btn-outline-primary" @onclick="LoadAsync">تصفية</button>
 
@@ -48,13 +49,15 @@
                         <th>الهاتف</th>
                         <th>الجنس</th>
                         <th>الاشتراك</th>
+                        <th>الخطة / المدة</th>
+                        <th>المدفوع / المتبقي</th>
                         <th>الإجراءات</th>
                     </tr>
                 </thead>
                 <tbody>
                     @if (trainees.Count == 0)
                     {
-                        <tr><td colspan="6" class="text-center py-4 text-secondary">لا توجد بيانات</td></tr>
+                        <tr><td colspan="8" class="text-center py-4 text-secondary">لا توجد بيانات</td></tr>
                     }
                     else
                     {
@@ -84,6 +87,28 @@
                                         <span class="badge text-bg-danger-subtle text-danger border border-danger-subtle">غير نشط</span>
                                     }
                                 </td>
+                                <td>
+                                    @if (IsActive(trainee) && !string.IsNullOrWhiteSpace(trainee.CurrentSubscriptionPlan))
+                                    {
+                                        <span>@MapPlan(trainee.CurrentSubscriptionPlan) / @MapPeriod(trainee.CurrentSubscriptionPeriod)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-secondary">-</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (IsActive(trainee) && trainee.CurrentPaidAmount.HasValue && trainee.RemainingAmount.HasValue)
+                                    {
+                                        <span class="text-primary">@trainee.CurrentPaidAmount.Value.ToString("0.##") ج.م</span>
+                                        <span class="text-secondary"> / </span>
+                                        <span class="text-danger">@trainee.RemainingAmount.Value.ToString("0.##") ج.م</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-secondary">-</span>
+                                    }
+                                </td>
                                 <td class="position-relative">
                                     <button class="btn btn-sm btn-light" @onclick="() => ToggleRowMenu(trainee.TraineeId)">
                                         <i class="bi bi-three-dots-vertical"></i>
@@ -96,9 +121,8 @@
                                             <button class="dropdown-item" @onclick='() => OpenEdit(trainee.TraineeId)'><i class="bi bi-pencil-square ms-2"></i>تعديل المتدرب</button>
                                             <div class="dropdown-divider"></div>
                                             <button class="dropdown-item" @onclick="IncreaseSessionAsync"><i class="bi bi-plus-circle ms-2"></i>زيادة الجلسة</button>
-                                            <button class="dropdown-item" @onclick='() => Navigation.NavigateTo("/payments/outstanding")'><i class="bi bi-credit-card ms-2"></i>معالجة الدفع</button>
                                             <div class="dropdown-divider"></div>
-                                            <button class="dropdown-item text-danger" @onclick="CloseContextMenu"><i class="bi bi-slash-circle ms-2"></i>تعطيل العضو</button>
+                                            <button class="dropdown-item text-danger" @onclick="() => DeleteTraineeAsync(trainee.TraineeId)"><i class="bi bi-trash ms-2"></i>حذف المتدرب</button>
                                         </div>
                                     }
                                 </td>
@@ -155,6 +179,29 @@
     private bool IsActive(GetAllTraineesResult trainee)
     {
         return trainee.CurrentSubscriptionEndDate.HasValue && trainee.CurrentSubscriptionEndDate.Value.Date >= DateTime.Today;
+    }
+
+    private static string MapPlan(string? plan)
+    {
+        return plan switch
+        {
+            "Basic" => "أساسي",
+            "Standard" => "قياسي",
+            "Premium" => "احترافي",
+            _ => plan ?? "-"
+        };
+    }
+
+    private static string MapPeriod(string? period)
+    {
+        return period switch
+        {
+            "Daily" => "يومي",
+            "Monthly" => "شهري",
+            "SixMonths" => "6 أشهر",
+            "Yearly" => "سنوي",
+            _ => period ?? "-"
+        };
     }
 
     private string GetInitials(string name)
@@ -229,5 +276,31 @@
 
         CloseContextMenu();
         await LoadAsync();
+    }
+
+    private async Task OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task DeleteTraineeAsync(Guid traineeId)
+    {
+        CloseContextMenu();
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "هل أنت متأكد من حذف هذا المتدرب نهائياً من قاعدة البيانات؟");
+        if (confirmed)
+        {
+            try
+            {
+                await ApiClient.DeleteTraineeAsync(traineeId);
+                await LoadAsync();
+            }
+            catch (Exception ex)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", $"فشل الحذف: {ex.Message}");
+            }
+        }
     }
 }

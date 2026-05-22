@@ -1,4 +1,51 @@
-﻿body {
+﻿#blazor-error-ui {
+    background: #fff3cd;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}
+
+.loading-progress {
+    position: relative;
+    display: block;
+    width: 8rem;
+    height: 8rem;
+    margin: 20vh auto 1rem auto;
+}
+
+.loading-progress circle {
+    fill: none;
+    stroke: #d6deec;
+    stroke-width: 0.6rem;
+    transform-origin: 50% 50%;
+}
+
+.loading-progress circle:last-child {
+    stroke: #1246cb;
+    stroke-dasharray: calc(3.1416 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+    transition: stroke-dasharray 0.05s ease-in-out;
+}
+
+.loading-progress-text {
+    text-align: center;
+    color: #445069;
+    font-weight: 600;
+}
+body {
     font-family: "Cairo", "Segoe UI", Tahoma, sans-serif;
     margin: 0;
     background: #f3f5f9;
@@ -9,18 +56,19 @@
 .lion-layout {
     min-height: 100vh;
     display: flex;
-    flex-direction: row-reverse;
+    flex-direction: row;
     background: #eef1f6;
 }
 
 .lion-sidebar {
     width: 320px;
     background: #f8faff;
-    border-left: 1px solid #cfd7e7;
+    border-right: 1px solid #cfd7e7;
     padding: 18px 14px;
     display: flex;
     flex-direction: column;
     gap: 14px;
+    transition: width 0.2s ease, padding 0.2s ease;
 }
 
 .lion-brand {
@@ -28,6 +76,10 @@
     align-items: center;
     gap: 10px;
     padding: 6px 8px 14px;
+}
+
+.sidebar-toggle {
+    margin-inline-start: auto;
 }
 
 .lion-brand-badge {
@@ -59,6 +111,13 @@
     font-weight: 600;
 }
 
+.lion-nav a i,
+.lion-footer-links i {
+    font-size: 1.1rem;
+    min-width: 1.2rem;
+    text-align: center;
+}
+
 .lion-nav a.active {
     color: #0e43c6;
     background: #e9efff;
@@ -79,6 +138,31 @@
     align-items: center;
     gap: 8px;
     font-weight: 600;
+}
+
+.sidebar-collapsed .lion-sidebar {
+    width: 88px;
+    padding: 18px 10px;
+}
+
+.sidebar-collapsed .sidebar-label {
+    display: none;
+}
+
+.sidebar-collapsed .lion-brand {
+    justify-content: center;
+}
+
+.sidebar-collapsed .sidebar-toggle {
+    margin-inline-start: 0;
+}
+
+.sidebar-collapsed .lion-nav a,
+.sidebar-collapsed .lion-footer-links a,
+.sidebar-collapsed .lion-footer-links button,
+.sidebar-collapsed .lion-sidebar .btn-primary {
+    justify-content: center;
+    gap: 0;
 }
 
 .lion-main {
@@ -393,4 +477,14 @@
     .lion-sidebar {
         width: auto;
     }
+
+    .sidebar-collapsed .lion-sidebar {
+        width: auto;
+    }
+
+    .sidebar-collapsed .sidebar-label {
+        display: inline;
+    }
 }
+
+

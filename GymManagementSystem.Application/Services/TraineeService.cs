@@ -47,7 +47,12 @@ namespace GymManagementSystem.Services
 
             return trainees.Select(t =>
             {
-                var currentSubscription = t.Subscriptions
+                var latestSubscription = t.Subscriptions
+                    .OrderByDescending(s => s.EndDate)
+                    .FirstOrDefault();
+                var today = DateTime.Today;
+                var activeSubscription = t.Subscriptions
+                    .Where(s => s.StartDate.Date <= today && s.EndDate.Date >= today)
                     .OrderByDescending(s => s.EndDate)
                     .FirstOrDefault();
 
@@ -58,8 +63,11 @@ namespace GymManagementSystem.Services
                     Phone = t.Phone,
                     Gender = t.Gender.ToString(),
                     PhotoPath = string.IsNullOrWhiteSpace(t.PhotoPath) ? null : storageService.BuildFileUrl(t.PhotoPath),
-                    CurrentSubscriptionEndDate = currentSubscription?.EndDate,
-                    RemainingAmount = currentSubscription?.RemainingAmount,
+                    CurrentSubscriptionEndDate = activeSubscription?.EndDate ?? latestSubscription?.EndDate,
+                    CurrentSubscriptionPlan = activeSubscription?.SubscriptionPlan.ToString(),
+                    CurrentSubscriptionPeriod = activeSubscription?.SubscriptionPeriod.ToString(),
+                    CurrentPaidAmount = activeSubscription?.PaidAmount,
+                    RemainingAmount = activeSubscription?.RemainingAmount,
                     CreationTime = t.CreationTime
                 };
             }).ToList();

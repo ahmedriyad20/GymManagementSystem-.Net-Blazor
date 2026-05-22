@@ -1,20 +1,18 @@
-@using System.Reflection
-
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly">
         <Found Context="routeData">
-            @if (IsAnonymousPage(routeData.PageType))
-            {
-                <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
-            }
-            else
-            {
-                <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
-                    <NotAuthorized>
-                        <Pages.RedirectToLogin />
-                    </NotAuthorized>
-                </AuthorizeRouteView>
-            }
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    <Pages.RedirectToLogin />
+                </NotAuthorized>
+                <Authorizing>
+                    <div class="d-flex align-items-center justify-content-center min-vh-100">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">جاري التحقق...</span>
+                        </div>
+                    </div>
+                </Authorizing>
+            </AuthorizeRouteView>
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />
         </Found>
         <NotFound>
@@ -24,10 +22,3 @@
         </NotFound>
     </Router>
 </CascadingAuthenticationState>
-
-@code {
-    private static bool IsAnonymousPage(Type pageType)
-    {
-        return pageType.GetCustomAttributes(inherit: true).Any(a => a.GetType().Name == "AllowAnonymousAttribute");
-    }
-}

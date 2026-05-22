@@ -75,7 +75,7 @@
         var state = await AuthProvider.GetAuthenticationStateAsync();
         if (state.User.Identity?.IsAuthenticated == true)
         {
-            Navigation.NavigateTo("/trainees", true);
+            Navigation.NavigateTo("/trainees");
         }
     }
 
@@ -90,7 +90,7 @@
             if (result?.IsAuthenticated == true && !string.IsNullOrWhiteSpace(result.Token))
             {
                 await AuthProvider.MarkUserAsAuthenticatedAsync(result.Token, result.RefreshToken);
-                Navigation.NavigateTo("/trainees", true);
+                Navigation.NavigateTo("/trainees");
                 return;
             }
 

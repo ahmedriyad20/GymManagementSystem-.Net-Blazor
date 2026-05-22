@@ -86,11 +86,30 @@ public class ApiClient(HttpClient httpClient)
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task DeleteTraineeAsync(Guid traineeId)
+    {
+        var response = await httpClient.DeleteAsync($"api/trainees/{traineeId}");
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task<SubscriptionResult?> CreateSubscriptionAsync(CreateSubscriptionCommand command)
     {
         var response = await httpClient.PostAsJsonAsync("api/gym/subscriptions", command);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<SubscriptionResult>();
+    }
+
+    public async Task<SubscriptionResult?> UpdateSubscriptionAsync(Guid subscriptionId, UpdateSubscriptionCommand command)
+    {
+        var response = await httpClient.PutAsJsonAsync($"api/gym/subscriptions/{subscriptionId}", command);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<SubscriptionResult>();
+    }
+
+    public async Task DeactivateActiveSubscriptionAsync(Guid traineeId)
+    {
+        var response = await httpClient.PostAsync($"api/gym/trainees/{traineeId}/subscriptions/deactivate", null);
+        response.EnsureSuccessStatusCode();
     }
 
     public async Task<SubscriptionResult?> AddInstallmentAsync(Guid subscriptionId, decimal amount)

@@ -1,10 +1,14 @@
 @inject NavigationManager Navigation
+@inject JwtAuthenticationStateProvider AuthProvider
 
 @code {
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        Navigation.NavigateTo("/login", true);
+        // Double-check: only redirect if truly not authenticated
+        var state = await AuthProvider.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo("/login", forceLoad: false, replace: true);
+        }
     }
 }
-
-

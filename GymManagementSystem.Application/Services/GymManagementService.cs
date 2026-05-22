@@ -55,6 +55,67 @@ namespace GymManagementSystem.Services
             return MapSubscription(subscription);
         }
 
+        public async Task<SubscriptionResult?> UpdateSubscriptionAsync(Guid subscriptionId, UpdateSubscriptionCommand command, string currentUserId)
+        {
+            var subscription = await subscriptionRepository.GetAll()
+                .Include(s => s.Trainee)
+                .FirstOrDefaultAsync(s => s.Id == subscriptionId);
+
+            if (subscription is null)
+            {
+                return null;
+            }
+
+            await EnsureTraineeAccessAsync(subscription.Trainee, currentUserId);
+
+            var price = await subscriptionPriceRepository.GetAll()
+                .FirstOrDefaultAsync(p => p.SubscriptionPlan == command.SubscriptionPlan && p.SubscriptionPeriod == command.SubscriptionPeriod)
+                ?? throw new InvalidOperationException("Subscription price not configured for selected plan and period.");
+
+            var totalAmount = price.Price;
+            if (command.PaidAmount < 0 || command.PaidAmount > totalAmount)
+            {
+                throw new InvalidOperationException("Invalid paid amount.");
+            }
+
+            subscription.SubscriptionPlan = command.SubscriptionPlan;
+            subscription.SubscriptionPeriod = command.SubscriptionPeriod;
+            subscription.TotalAmount = totalAmount;
+            subscription.PaidAmount = command.PaidAmount;
+            subscription.RemainingAmount = totalAmount - command.PaidAmount;
+            subscription.StartDate = command.StartDate;
+            subscription.EndDate = CalculateEndDate(command.StartDate, command.SubscriptionPeriod);
+
+            await subscriptionRepository.UpdateAsync(subscription);
+            return MapSubscription(subscription);
+        }
+
+        public async Task<bool> DeactivateActiveSubscriptionAsync(Guid traineeId, string currentUserId)
+        {
+            var trainee = await traineeRepository.GetAll().FirstOrDefaultAsync(t => t.Id == traineeId);
+            if (trainee is null)
+            {
+                return false;
+            }
+
+            await EnsureTraineeAccessAsync(trainee, currentUserId);
+
+            var today = DateTime.Today;
+            var activeSubscription = await subscriptionRepository.GetAll()
+                .Where(s => s.TraineeId == traineeId && s.StartDate.Date <= today && s.EndDate.Date >= today)
+                .OrderByDescending(s => s.EndDate)
+                .FirstOrDefaultAsync();
+
+            if (activeSubscription is null)
+            {
+                return false;
+            }
+
+            activeSubscription.EndDate = today.AddDays(-1);
+            await subscriptionRepository.UpdateAsync(activeSubscription);
+            return true;
+        }
+
         public async Task<SubscriptionResult?> AddInstallmentAsync(Guid subscriptionId, AddInstallmentCommand command, string currentUserId)
         {
             var subscription = await subscriptionRepository.GetAll()
