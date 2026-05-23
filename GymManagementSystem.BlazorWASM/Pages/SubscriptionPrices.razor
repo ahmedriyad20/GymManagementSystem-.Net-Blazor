@@ -1,0 +1,297 @@
+@page "/subscription-prices"
+@attribute [Authorize]
+@inject ApiClient ApiClient
+@inject IJSRuntime JSRuntime
+@using GymManagementSystem.DTOs.SubscriptionPrice.Commands
+
+<div class="subscription-prices-page animate__animated animate__fadeIn">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="display-6 fw-bold mb-1">أسعار الاشتراكات</h1>
+            <p class="text-secondary mb-0">تحديد وتعديل أسعار باقات وفترات الاشتراك المتاحة في الصالة</p>
+        </div>
+        @if (!showForm)
+        {
+            <button class="btn btn-primary btn-lg" @onclick="OpenAddForm">
+                <i class="bi bi-plus-lg ms-1"></i> إضافة سعر جديد
+            </button>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div class="alert @(message.Contains("بنجاح") ? "alert-success" : "alert-danger") alert-dismissible fade show mb-4" role="alert">
+            @message
+            <button type="button" class="btn-close shadow-none" @onclick="() => message = null"></button>
+        </div>
+    }
+
+    <div class="row g-4">
+        <!-- List of Prices -->
+        <div class="@(showForm ? "col-lg-8" : "col-12")">
+            <div class="card border-0 shadow-sm">
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>خطة الاشتراك</th>
+                                <th>الفترة الزمنية</th>
+                                <th>السعر الحالي</th>
+                                <th class="text-end">الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (loading)
+                            {
+                                <tr>
+                                    <td colspan="4" class="text-center py-5">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">جاري التحميل...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else if (prices.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="4" class="text-center py-5 text-secondary">
+                                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                        لا توجد أسعار مضافة بعد.
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var price in prices)
+                                {
+                                    <tr>
+                                        <td class="fw-bold text-dark">
+                                            <span class="badge @(price.SubscriptionPlan == "Basic" ? "bg-primary-subtle text-primary" : "bg-success-subtle text-success") px-3 py-2 fs-6">
+                                                @MapPlan(price.SubscriptionPlan)
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="text-dark">@MapPeriod(price.SubscriptionPeriod)</span>
+                                        </td>
+                                        <td class="fw-bold text-primary fs-5">
+                                            @price.Price.ToString("0.##") ج.م
+                                        </td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-primary ms-1" @onclick="() => OpenEditForm(price)">
+                                                <i class="bi bi-pencil-square ms-1"></i> تعديل
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(price.SubscriptionPriceId)">
+                                                <i class="bi bi-trash ms-1"></i> حذف
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add/Edit Form Sidebar -->
+        @if (showForm)
+        {
+            <div class="col-lg-4 animate__animated animate__slideInLeft">
+                <div class="card border-0 shadow-sm p-4">
+                    <h4 class="fw-bold mb-3">@(editingId.HasValue ? "تعديل سعر الاشتراك" : "إضافة سعر اشتراك جديد")</h4>
+                    <EditForm Model="form" OnValidSubmit="SaveAsync">
+                        <DataAnnotationsValidator />
+
+                        <div class="mb-3">
+                            <label class="form-label">خطة الاشتراك</label>
+                            <InputSelect class="form-select" @bind-Value="form.SubscriptionPlan" disabled="@editingId.HasValue">
+                                <option value="@enSubscriptionPlan.Basic">Basic (أساسي)</option>
+                                <option value="@enSubscriptionPlan.Cardio">Cardio (كارديو)</option>
+                            </InputSelect>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">المدة الزمنية</label>
+                            <InputSelect class="form-select" @bind-Value="form.SubscriptionPeriod" disabled="@editingId.HasValue">
+                                <option value="@enSubscriptionPeriod.Daily">Daily (يومي)</option>
+                                <option value="@enSubscriptionPeriod.Monthly">Monthly (شهري)</option>
+                                <option value="@enSubscriptionPeriod.SixMonths">SixMonths (6 أشهر)</option>
+                                <option value="@enSubscriptionPeriod.Yearly">Yearly (سنوي)</option>
+                            </InputSelect>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">السعر (ج.م)</label>
+                            <div class="input-group">
+                                <InputNumber class="form-control" @bind-Value="form.Price" min="0" placeholder="0.00" />
+                                <span class="input-group-text bg-light">ج.م</span>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-success flex-fill" type="submit" disabled="@saving">
+                                @(saving ? "جاري الحفظ..." : "حفظ")
+                            </button>
+                            <button class="btn btn-outline-secondary" type="button" @onclick="CloseForm" disabled="@saving">
+                                إلغاء
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<GetAllSubscriptionPricesResult> prices = [];
+    private bool loading = true;
+    private bool saving;
+    private bool showForm;
+    private Guid? editingId;
+    private PriceForm form = new();
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            prices = await ApiClient.GetSubscriptionPricesAsync();
+        }
+        catch (Exception ex)
+        {
+            message = $"فشل تحميل البيانات: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void OpenAddForm()
+    {
+        message = null;
+        editingId = null;
+        form = new PriceForm
+        {
+            SubscriptionPlan = enSubscriptionPlan.Basic,
+            SubscriptionPeriod = enSubscriptionPeriod.Monthly,
+            Price = 0
+        };
+        showForm = true;
+    }
+
+    private void OpenEditForm(GetAllSubscriptionPricesResult price)
+    {
+        message = null;
+        editingId = price.SubscriptionPriceId;
+        form = new PriceForm
+        {
+            SubscriptionPlan = Enum.TryParse<enSubscriptionPlan>(price.SubscriptionPlan, out var plan) ? plan : enSubscriptionPlan.Basic,
+            SubscriptionPeriod = Enum.TryParse<enSubscriptionPeriod>(price.SubscriptionPeriod, out var period) ? period : enSubscriptionPeriod.Monthly,
+            Price = price.Price
+        };
+        showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        showForm = false;
+        editingId = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        message = null;
+
+        try
+        {
+            if (editingId.HasValue)
+            {
+                await ApiClient.UpdateSubscriptionPriceAsync(editingId.Value, new UpdateSubscriptionPriceCommand
+                {
+                    SubscriptionPlan = form.SubscriptionPlan,
+                    SubscriptionPeriod = form.SubscriptionPeriod,
+                    Price = form.Price
+                });
+                message = "تم تحديث سعر الاشتراك بنجاح.";
+            }
+            else
+            {
+                await ApiClient.CreateSubscriptionPriceAsync(new CreateSubscriptionPriceCommand
+                {
+                    SubscriptionPlan = form.SubscriptionPlan,
+                    SubscriptionPeriod = form.SubscriptionPeriod,
+                    Price = form.Price
+                });
+                message = "تمت إضافة سعر الاشتراك بنجاح.";
+            }
+
+            showForm = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            message = $"خطأ: {ex.Message}";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        message = null;
+        var confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "هل أنت متأكد من حذف هذا السعر؟ قد يؤدي هذا إلى تعطل عمليات التسجيل الجديدة المعتمدة على هذا التكوين.");
+        if (confirmed)
+        {
+            try
+            {
+                await ApiClient.DeleteSubscriptionPriceAsync(id);
+                message = "تم حذف سعر الاشتراك بنجاح.";
+                await LoadAsync();
+            }
+            catch (Exception ex)
+            {
+                message = $"فشل الحذف: {ex.Message}";
+            }
+        }
+    }
+
+    private static string MapPlan(string? plan)
+    {
+        return plan switch
+        {
+            "Basic" => "أساسي",
+            "Cardio" => "كارديو",
+            _ => plan ?? "-"
+        };
+    }
+
+    private static string MapPeriod(string? period)
+    {
+        return period switch
+        {
+            "Daily" => "يومي",
+            "Monthly" => "شهري",
+            "SixMonths" => "6 أشهر",
+            "Yearly" => "سنوي",
+            _ => period ?? "-"
+        };
+    }
+
+    private class PriceForm
+    {
+        public enSubscriptionPlan SubscriptionPlan { get; set; }
+        public enSubscriptionPeriod SubscriptionPeriod { get; set; }
+        public decimal Price { get; set; }
+    }
+}

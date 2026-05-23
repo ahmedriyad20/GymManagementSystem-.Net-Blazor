@@ -20,5 +20,6 @@ namespace GymManagementSystem.Interfaces
         Task<List<UnpaidInstallmentResult>> GetUnpaidInstallmentsAsync(string currentUserId);
         Task<EarningsSummaryResult> GetEarningsSummaryAsync(int year, int month);
         Task<EarningsDashboardResult> GetEarningsDashboardAsync(int year, int month);
+        Task<List<GymPaymentTransactionResult>> GetTransactionsHistoryAsync(string currentUserId);
     }
 }

@@ -10,6 +10,7 @@ using GymManagementSystem.DTOs.Reports.Results;
 using GymManagementSystem.DTOs.Subscription.Commands;
 using GymManagementSystem.DTOs.Subscription.Results;
 using GymManagementSystem.DTOs.SubscriptionPrice.Results;
+using GymManagementSystem.DTOs.SubscriptionPrice.Commands;
 using GymManagementSystem.DTOs.Trainee.Commands;
 using GymManagementSystem.DTOs.Trainee.Results;
 using GymManagementSystem.DTOs.User.Commands;
@@ -147,6 +148,11 @@ public class ApiClient(HttpClient httpClient)
         return await httpClient.GetFromJsonAsync<EarningsDashboardResult>($"api/gym/reports/earnings/dashboard?year={year}&month={month}");
     }
 
+    public async Task<List<GymPaymentTransactionResult>> GetTransactionsHistoryAsync()
+    {
+        return await httpClient.GetFromJsonAsync<List<GymPaymentTransactionResult>>("api/gym/transactions") ?? [];
+    }
+
     public async Task<List<ExpenseResult>> GetExpensesAsync(DateTime? fromDate, DateTime? toDate)
     {
         var query = new List<string>();
@@ -165,6 +171,29 @@ public class ApiClient(HttpClient httpClient)
     public async Task<List<GetAllSubscriptionPricesResult>> GetSubscriptionPricesAsync()
     {
         return await httpClient.GetFromJsonAsync<List<GetAllSubscriptionPricesResult>>("api/subscription-prices") ?? [];
+    }
+
+    public async Task<GetSubscriptionPriceResult?> GetSubscriptionPriceAsync(Guid subscriptionPriceId)
+    {
+        return await httpClient.GetFromJsonAsync<GetSubscriptionPriceResult>($"api/subscription-prices/{subscriptionPriceId}");
+    }
+
+    public async Task CreateSubscriptionPriceAsync(CreateSubscriptionPriceCommand command)
+    {
+        var response = await httpClient.PostAsJsonAsync("api/subscription-prices", command);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task UpdateSubscriptionPriceAsync(Guid subscriptionPriceId, UpdateSubscriptionPriceCommand command)
+    {
+        var response = await httpClient.PutAsJsonAsync($"api/subscription-prices/{subscriptionPriceId}", command);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task DeleteSubscriptionPriceAsync(Guid subscriptionPriceId)
+    {
+        var response = await httpClient.DeleteAsync($"api/subscription-prices/{subscriptionPriceId}");
+        response.EnsureSuccessStatusCode();
     }
 
     private class CreateTraineeResponse

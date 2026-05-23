@@ -1,4 +1,4 @@
-﻿using GymManagementSystem.Configurations;
+using GymManagementSystem.Configurations;
 using GymManagementSystem.Entities;
 using GymManagementSystem.Entities.Users;
 using Microsoft.AspNetCore.Identity;
@@ -18,6 +18,7 @@ public class GymManagementSystemDbContext : IdentityDbContext<User>
     public DbSet<Expense> Expenses { get; set; }
     public DbSet<SubscriptionPrice> SubscriptionPrices { get; set; }
     public DbSet<UserRefreshToken> UserRefreshTokens { get; set; }
+    public DbSet<Installment> Installments { get; set; }
 
     public GymManagementSystemDbContext(DbContextOptions<GymManagementSystemDbContext> options)
         : base(options)

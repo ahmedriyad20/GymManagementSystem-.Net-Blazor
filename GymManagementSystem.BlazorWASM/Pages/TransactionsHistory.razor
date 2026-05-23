@@ -1,0 +1,326 @@
+@page "/transactions"
+@attribute [Authorize]
+@inject ApiClient ApiClient
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthProvider
+
+<div class="transactions-history-page animate__animated animate__fadeIn" dir="rtl">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+        <div>
+            <h1 class="display-6 fw-bold mb-1">سجل المعاملات والإيرادات</h1>
+            <p class="text-secondary mb-0">تتبع ومراقبة كافة الاشتراكات، الدفعات الأولى، والأقساط التي تدخل الصالة.</p>
+        </div>
+        <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/earnings")'>
+            <i class="bi bi-arrow-right ms-1"></i> العودة للأرباح
+        </button>
+    </div>
+
+    <!-- Summary Metrics -->
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-md-4">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-secondary fw-semibold">صافي الإيرادات المعروضة</span>
+                    <i class="bi bi-cash-stack text-success fs-4"></i>
+                </div>
+                <h3 class="fw-bold @(filteredTransactions.Sum(x => x.Amount) >= 0 ? "text-success" : "text-danger") display-6 mb-0">@FormatMoney(filteredTransactions.Sum(x => x.Amount))</h3>
+                <small class="text-muted d-block mt-1">
+                    الوارد: @FormatMoney(filteredTransactions.Where(x => x.Amount > 0).Sum(x => x.Amount)) | 
+                    المصروف: @FormatMoney(Math.Abs(filteredTransactions.Where(x => x.Amount < 0).Sum(x => x.Amount)))
+                </small>
+            </div>
+        </div>
+        <div class="col-6 col-md-4">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-secondary fw-semibold">عدد العمليات</span>
+                    <i class="bi bi-receipt text-primary fs-4"></i>
+                </div>
+                <h3 class="fw-bold text-primary display-6 mb-0">@filteredTransactions.Count.ToString("N0")</h3>
+                <small class="text-muted">معاملة تشمل المقبوضات والمصاريف</small>
+            </div>
+        </div>
+        <div class="col-6 col-md-4">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-white">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-secondary fw-semibold">متوسط الدفع والمصاريف</span>
+                    <i class="bi bi-calculator text-secondary fs-4"></i>
+                </div>
+                <h3 class="fw-bold text-secondary display-6 mb-0">
+                    @FormatMoney(filteredTransactions.Where(x => x.Amount > 0).Any() ? filteredTransactions.Where(x => x.Amount > 0).Average(x => x.Amount) : 0m)
+                </h3>
+                <small class="text-muted d-block mt-1">
+                    متوسط المصاريف: @FormatMoney(filteredTransactions.Where(x => x.Amount < 0).Any() ? Math.Abs(filteredTransactions.Where(x => x.Amount < 0).Average(x => x.Amount)) : 0m)
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Card -->
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body">
+            <h5 class="fw-bold mb-3"><i class="bi bi-filter-left ms-1 text-primary"></i> خيارات التصفية والبحث</h5>
+            <div class="row g-3">
+                <div class="col-12 col-md-4 col-lg-3">
+                    <label class="form-label small text-secondary">البحث عن متدرب</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                        <input class="form-control border-start-0 shadow-none" @bind="searchText" @bind:event="oninput" @onkeyup="OnSearchKeyUp" placeholder="اكتب اسم المتدرب..." />
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small text-secondary">نوع المعاملة</label>
+                    <select class="form-select" @bind="selectedType" @bind:after="ApplyFilters">
+                        <option value="">جميع الأنواع</option>
+                        <option value="Subscription">اشتراك جديد</option>
+                        <option value="Installment">دفعة قسط</option>
+                        <option value="Expense">مصروف</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <label class="form-label small text-secondary">باقة الاشتراك</label>
+                    <select class="form-select" @bind="selectedPlan" @bind:after="ApplyFilters">
+                        <option value="">جميع الباقات</option>
+                        <option value="Basic">Basic (أساسي)</option>
+                        <option value="Cardio">Cardio (كارديو)</option>
+                    </select>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <label class="form-label small text-secondary">من تاريخ</label>
+                    <input class="form-control" type="date" @bind="fromDate" @bind:after="ApplyFilters" />
+                </div>
+                <div class="col-6 col-lg-2">
+                    <label class="form-label small text-secondary">إلى تاريخ</label>
+                    <input class="form-control" type="date" @bind="toDate" @bind:after="ApplyFilters" />
+                </div>
+                <div class="col-12 col-lg-1 d-flex align-items-end">
+                    <button class="btn btn-outline-secondary w-100" @onclick="ClearFilters">إعادة تعيين</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table Card -->
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>المتدرب</th>
+                        <th>نوع المعاملة</th>
+                        <th>تفاصيل الاشتراك</th>
+                        <th>تاريخ الدفع</th>
+                        <th class="text-end">المبلغ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (loading)
+                    {
+                        <tr>
+                            <td colspan="5" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">جاري التحميل...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    else if (filteredTransactions.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-secondary">
+                                <i class="bi bi-inbox fs-1 d-block mb-2 text-muted"></i>
+                                لا توجد معاملات مطابقة لمعايير البحث.
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var tx in filteredTransactions)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="avatar-badge @(tx.Type == "Expense" ? "bg-danger-subtle text-danger" : "")">
+                                            @(tx.Type == "Expense" ? "م.ص" : GetInitials(tx.TraineeName))
+                                        </div>
+                                        <span class="fw-semibold text-dark">@tx.TraineeName</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge @(tx.Type == "Subscription" ? "bg-success-subtle text-success border border-success-subtle" : tx.Type == "Installment" ? "bg-purple-subtle text-purple border border-purple-subtle" : "bg-danger-subtle text-danger border border-danger-subtle") px-3 py-2">
+                                        @(tx.Type == "Subscription" ? "اشتراك جديد" : tx.Type == "Installment" ? "دفعة قسط" : "مصروف")
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (tx.Type == "Expense")
+                                    {
+                                        <span class="text-dark fw-medium">@tx.Plan</span>
+                                        <span class="text-secondary small"> / @tx.Period</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-dark fw-medium">@MapPlan(tx.Plan)</span>
+                                        <span class="text-secondary small"> / @MapPeriod(tx.Period)</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="text-secondary">@tx.Date.ToString("yyyy-MM-dd HH:mm")</span>
+                                </td>
+                                <td class="text-end fw-bold @(tx.Amount >= 0 ? "text-success" : "text-danger") fs-5">
+                                    @(tx.Amount >= 0 ? "+" : "-") @Math.Abs(tx.Amount).ToString("0.##") ج.م
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    .avatar-badge {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background-color: #f0f4ff;
+        color: #3b82f6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 0.95rem;
+    }
+    .bg-purple-subtle {
+        background-color: #f3e8ff !important;
+    }
+    .text-purple {
+        color: #a855f7 !important;
+    }
+    .border-purple-subtle {
+        border-color: #e9d5ff !important;
+    }
+</style>
+
+@code {
+    private List<GymPaymentTransactionResult> allTransactions = [];
+    private List<GymPaymentTransactionResult> filteredTransactions = [];
+    private bool loading = true;
+    private string searchText = string.Empty;
+    private string selectedType = string.Empty;
+    private string selectedPlan = string.Empty;
+    private DateTime? fromDate;
+    private DateTime? toDate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthProvider.GetAuthenticationStateAsync();
+        var claims = state.User.Claims.Select(c => c.Value.ToLowerInvariant()).ToList();
+        var isFemaleOnlyScope = claims.Any(v => v.Contains("female") || v.Contains("women") || v.Contains("ladies") || v.Contains("انث"));
+        if (isFemaleOnlyScope)
+        {
+            Navigation.NavigateTo("/trainees", replace: true);
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            allTransactions = await ApiClient.GetTransactionsHistoryAsync();
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"فشل تحميل سجل المعاملات: {ex.Message}");
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        var query = allTransactions.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            query = query.Where(x => x.TraineeName.Contains(searchText, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedType))
+        {
+            query = query.Where(x => x.Type.Equals(selectedType, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedPlan))
+        {
+            query = query.Where(x => x.Plan.Equals(selectedPlan, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (fromDate.HasValue)
+        {
+            query = query.Where(x => x.Date.Date >= fromDate.Value.Date);
+        }
+
+        if (toDate.HasValue)
+        {
+            query = query.Where(x => x.Date.Date <= toDate.Value.Date);
+        }
+
+        filteredTransactions = query.ToList();
+    }
+
+    private void OnSearchKeyUp(KeyboardEventArgs e)
+    {
+        ApplyFilters();
+    }
+
+    private void ClearFilters()
+    {
+        searchText = string.Empty;
+        selectedType = string.Empty;
+        selectedPlan = string.Empty;
+        fromDate = null;
+        toDate = null;
+        ApplyFilters();
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "LG";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpperInvariant();
+        return string.Concat(parts[0][0], parts[1][0]).ToUpperInvariant();
+    }
+
+    private static string MapPlan(string? plan)
+    {
+        return plan switch
+        {
+            "Basic" => "أساسي",
+            "Cardio" => "كارديو",
+            _ => plan ?? "-"
+        };
+    }
+
+    private static string MapPeriod(string? period)
+    {
+        return period switch
+        {
+            "Daily" => "يومي",
+            "Monthly" => "شهري",
+            "SixMonths" => "6 أشهر",
+            "Yearly" => "سنوي",
+            _ => period ?? "-"
+        };
+    }
+
+    private static string FormatMoney(decimal amount) => $"{amount:N2} ج.م";
+}

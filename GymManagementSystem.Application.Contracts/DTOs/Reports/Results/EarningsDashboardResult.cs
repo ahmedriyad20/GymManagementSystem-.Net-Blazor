@@ -4,6 +4,8 @@ namespace GymManagementSystem.DTOs.Reports.Results
     {
         public decimal TotalEarnings { get; set; }
         public decimal MonthlyEarnings { get; set; }
+        public decimal TotalEarningsBeforeExpenses { get; set; }
+        public decimal MonthlyEarningsBeforeExpenses { get; set; }
         public int ActiveSubscriptions { get; set; }
         public int NewSubscriptionsThisMonth { get; set; }
         public decimal YearOverYearGrowthPercent { get; set; }

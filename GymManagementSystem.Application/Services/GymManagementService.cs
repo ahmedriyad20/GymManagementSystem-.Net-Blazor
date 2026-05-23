@@ -20,6 +20,7 @@ namespace GymManagementSystem.Services
         IRepository<SubscriptionPrice> subscriptionPriceRepository,
         IRepository<AttendanceSession> attendanceSessionRepository,
         IRepository<Expense> expenseRepository,
+        IRepository<Installment> installmentRepository,
         UserManager<User> userManager) : IGymManagementService
     {
         public async Task<SubscriptionResult> CreateSubscriptionAsync(CreateSubscriptionCommand command, string currentUserId)
@@ -52,6 +53,18 @@ namespace GymManagementSystem.Services
             };
 
             await subscriptionRepository.InsertAsync(subscription);
+
+            if (command.PaidAmount > 0)
+            {
+                var installment = new Installment
+                {
+                    SubscriptionId = subscription.Id,
+                    Amount = command.PaidAmount
+                };
+                installment.CreationTime = command.StartDate;
+                await installmentRepository.InsertAsync(installment);
+            }
+
             return MapSubscription(subscription);
         }
 
@@ -138,6 +151,15 @@ namespace GymManagementSystem.Services
             subscription.RemainingAmount -= command.AmountPaid;
 
             await subscriptionRepository.UpdateAsync(subscription);
+
+            var installment = new Installment
+            {
+                SubscriptionId = subscription.Id,
+                Amount = command.AmountPaid,
+                CreationTime = DateTime.UtcNow
+            };
+            await installmentRepository.InsertAsync(installment);
+
             return MapSubscription(subscription);
         }
 
@@ -284,11 +306,52 @@ namespace GymManagementSystem.Services
                 .Include(s => s.Trainee)
                 .ToListAsync();
             var expenses = await expenseRepository.GetAll().ToListAsync();
+            var installments = await installmentRepository.GetAll()
+                .Include(i => i.Subscription)
+                .ThenInclude(s => s.Trainee)
+                .ToListAsync();
 
-            var totalEarnings = subscriptions.Sum(s => s.PaidAmount);
-            var monthlyEarnings = subscriptions
-                .Where(s => s.StartDate.Year == year && s.StartDate.Month == month)
-                .Sum(s => s.PaidAmount);
+            // Unified list of payment events to support backwards compatibility
+            var payments = new List<(DateTime Date, string Name, string Description, decimal Amount)>();
+
+            // 1. Add all actual installments
+            foreach (var inst in installments)
+            {
+                payments.Add((
+                    inst.CreationTime,
+                    inst.Subscription?.Trainee?.Name ?? "مشترك",
+                    $"قسط - {inst.Subscription?.SubscriptionPlan} - {inst.Subscription?.SubscriptionPeriod}",
+                    inst.Amount
+                ));
+            }
+
+            // 2. Add historical subscriptions that don't have any installments mapped (backwards compatibility)
+            var subscriptionIdsWithInstallments = installments.Select(i => i.SubscriptionId).ToHashSet();
+            foreach (var sub in subscriptions)
+            {
+                if (sub.PaidAmount > 0 && !subscriptionIdsWithInstallments.Contains(sub.Id))
+                {
+                    payments.Add((
+                        sub.StartDate,
+                        sub.Trainee?.Name ?? "مشترك",
+                        $"{sub.SubscriptionPlan} - {sub.SubscriptionPeriod}",
+                        sub.PaidAmount
+                    ));
+                }
+            }
+
+            var totalExpenses = expenses.Sum(e => e.Amount);
+            var monthlyExpenses = expenses
+                .Where(e => e.ExpenseDate.Year == year && e.ExpenseDate.Month == month)
+                .Sum(e => e.Amount);
+
+            var totalEarningsBefore = payments.Sum(p => p.Amount);
+            var monthlyEarningsBefore = payments
+                .Where(p => p.Date.Year == year && p.Date.Month == month)
+                .Sum(p => p.Amount);
+
+            var totalEarningsAfter = totalEarningsBefore - totalExpenses;
+            var monthlyEarningsAfter = monthlyEarningsBefore - monthlyExpenses;
 
             var currentMonthStart = new DateTime(year, month, 1);
             var previousMonthStart = currentMonthStart.AddMonths(-1);
@@ -296,17 +359,29 @@ namespace GymManagementSystem.Services
             var previousYearStart = currentYearStart.AddYears(-1);
             var previousYearEnd = currentYearStart.AddDays(-1);
 
-            var previousMonthEarnings = subscriptions
-                .Where(s => s.StartDate.Year == previousMonthStart.Year && s.StartDate.Month == previousMonthStart.Month)
-                .Sum(s => s.PaidAmount);
+            var previousMonthEarningsBefore = payments
+                .Where(p => p.Date.Year == previousMonthStart.Year && p.Date.Month == previousMonthStart.Month)
+                .Sum(p => p.Amount);
+            var previousMonthExpenses = expenses
+                .Where(e => e.ExpenseDate.Year == previousMonthStart.Year && e.ExpenseDate.Month == previousMonthStart.Month)
+                .Sum(e => e.Amount);
+            var previousMonthEarningsAfter = previousMonthEarningsBefore - previousMonthExpenses;
 
-            var currentYearEarnings = subscriptions
-                .Where(s => s.StartDate >= currentYearStart && s.StartDate <= currentMonthStart.AddMonths(1).AddTicks(-1))
-                .Sum(s => s.PaidAmount);
+            var currentYearEarningsBefore = payments
+                .Where(p => p.Date >= currentYearStart && p.Date <= currentMonthStart.AddMonths(1).AddTicks(-1))
+                .Sum(p => p.Amount);
+            var currentYearExpenses = expenses
+                .Where(e => e.ExpenseDate >= currentYearStart && e.ExpenseDate <= currentMonthStart.AddMonths(1).AddTicks(-1))
+                .Sum(e => e.Amount);
+            var currentYearEarningsAfter = currentYearEarningsBefore - currentYearExpenses;
 
-            var previousYearEarnings = subscriptions
-                .Where(s => s.StartDate >= previousYearStart && s.StartDate <= previousYearEnd)
-                .Sum(s => s.PaidAmount);
+            var previousYearEarningsBefore = payments
+                .Where(p => p.Date >= previousYearStart && p.Date <= previousYearEnd)
+                .Sum(p => p.Amount);
+            var previousYearExpenses = expenses
+                .Where(e => e.ExpenseDate >= previousYearStart && e.ExpenseDate <= previousYearEnd)
+                .Sum(e => e.Amount);
+            var previousYearEarningsAfter = previousYearEarningsBefore - previousYearExpenses;
 
             var now = DateTime.UtcNow.Date;
             var activeSubscriptions = subscriptions.Count(s => s.EndDate.Date >= now);
@@ -315,24 +390,25 @@ namespace GymManagementSystem.Services
             var monthlyTrend = Enumerable.Range(0, 5)
                 .Select(offset => currentMonthStart.AddMonths(-offset))
                 .OrderBy(d => d)
-                .Select(d => new EarningsTrendPointResult
-                {
-                    Year = d.Year,
-                    Month = d.Month,
-                    Amount = subscriptions
-                        .Where(s => s.StartDate.Year == d.Year && s.StartDate.Month == d.Month)
-                        .Sum(s => s.PaidAmount)
+                .Select(d => {
+                    var earningsVal = payments.Where(p => p.Date.Year == d.Year && p.Date.Month == d.Month).Sum(p => p.Amount);
+                    var expensesVal = expenses.Where(e => e.ExpenseDate.Year == d.Year && e.ExpenseDate.Month == d.Month).Sum(e => e.Amount);
+                    return new EarningsTrendPointResult
+                    {
+                        Year = d.Year,
+                        Month = d.Month,
+                        Amount = Math.Max(0, earningsVal - expensesVal)
+                    };
                 })
                 .ToList();
 
-            var subscriptionTransactions = subscriptions
-                .Where(s => s.PaidAmount > 0)
-                .Select(s => new RecentFinancialTransactionResult
+            var subscriptionTransactions = payments
+                .Select(p => new RecentFinancialTransactionResult
                 {
-                    Date = s.StartDate,
-                    Name = s.Trainee?.Name ?? "مشترك",
-                    Description = $"{s.SubscriptionPlan} - {s.SubscriptionPeriod}",
-                    Amount = s.PaidAmount,
+                    Date = p.Date,
+                    Name = p.Name,
+                    Description = p.Description,
+                    Amount = p.Amount,
                     Status = "Completed"
                 });
 
@@ -354,15 +430,87 @@ namespace GymManagementSystem.Services
 
             return new EarningsDashboardResult
             {
-                TotalEarnings = totalEarnings,
-                MonthlyEarnings = monthlyEarnings,
+                TotalEarnings = totalEarningsAfter,
+                MonthlyEarnings = monthlyEarningsAfter,
+                TotalEarningsBeforeExpenses = totalEarningsBefore,
+                MonthlyEarningsBeforeExpenses = monthlyEarningsBefore,
                 ActiveSubscriptions = activeSubscriptions,
                 NewSubscriptionsThisMonth = newSubscriptionsThisMonth,
-                MonthOverMonthGrowthPercent = CalculateGrowthPercent(monthlyEarnings, previousMonthEarnings),
-                YearOverYearGrowthPercent = CalculateGrowthPercent(currentYearEarnings, previousYearEarnings),
+                MonthOverMonthGrowthPercent = CalculateGrowthPercent(monthlyEarningsAfter, previousMonthEarningsAfter),
+                YearOverYearGrowthPercent = CalculateGrowthPercent(currentYearEarningsAfter, previousYearEarningsAfter),
                 MonthlyTrend = monthlyTrend,
                 RecentTransactions = recentTransactions
             };
+        }
+
+        public async Task<List<GymPaymentTransactionResult>> GetTransactionsHistoryAsync(string currentUserId)
+        {
+            var isFemaleOnly = await IsFemaleOnlyUserAsync(currentUserId);
+            if (isFemaleOnly)
+            {
+                return new List<GymPaymentTransactionResult>();
+            }
+
+            var subscriptions = await subscriptionRepository.GetAll()
+                .Include(s => s.Trainee)
+                .ToListAsync();
+
+            var installments = await installmentRepository.GetAll()
+                .Include(i => i.Subscription)
+                .ThenInclude(s => s.Trainee)
+                .ToListAsync();
+
+            var expenses = await expenseRepository.GetAll().ToListAsync();
+
+            var results = new List<GymPaymentTransactionResult>();
+
+            // 1. Add installments
+            foreach (var inst in installments)
+            {
+                results.Add(new GymPaymentTransactionResult
+                {
+                    Date = inst.CreationTime,
+                    TraineeName = inst.Subscription?.Trainee?.Name ?? "مشترك",
+                    Plan = inst.Subscription?.SubscriptionPlan.ToString() ?? "Basic",
+                    Period = inst.Subscription?.SubscriptionPeriod.ToString() ?? "Monthly",
+                    Amount = inst.Amount,
+                    Type = "Installment"
+                });
+            }
+
+            // 2. Add historical subscriptions
+            var subscriptionIdsWithInstallments = installments.Select(i => i.SubscriptionId).ToHashSet();
+            foreach (var sub in subscriptions)
+            {
+                if (sub.PaidAmount > 0 && !subscriptionIdsWithInstallments.Contains(sub.Id))
+                {
+                    results.Add(new GymPaymentTransactionResult
+                    {
+                        Date = sub.StartDate,
+                        TraineeName = sub.Trainee?.Name ?? "مشترك",
+                        Plan = sub.SubscriptionPlan.ToString(),
+                        Period = sub.SubscriptionPeriod.ToString(),
+                        Amount = sub.PaidAmount,
+                        Type = "Subscription"
+                    });
+                }
+            }
+
+            // 3. Add expenses
+            foreach (var exp in expenses)
+            {
+                results.Add(new GymPaymentTransactionResult
+                {
+                    Date = exp.ExpenseDate,
+                    TraineeName = string.IsNullOrWhiteSpace(exp.PaidBy) ? "مصروف" : exp.PaidBy,
+                    Plan = exp.Category ?? "مصروفات عامة",
+                    Period = exp.Description ?? "مصاريف تشغيلية",
+                    Amount = -exp.Amount,
+                    Type = "Expense"
+                });
+            }
+
+            return results.OrderByDescending(r => r.Date).ToList();
         }
 
         private static DateTime CalculateEndDate(DateTime startDate, enSubscriptionPeriod period)

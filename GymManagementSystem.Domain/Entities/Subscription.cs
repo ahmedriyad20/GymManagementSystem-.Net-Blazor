@@ -1,4 +1,4 @@
-﻿using GymManagementSystem.Enums;
+using GymManagementSystem.Enums;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -20,5 +20,6 @@ namespace GymManagementSystem.Entities
 
         public Trainee Trainee { get; set; } = null!;
         public ICollection<AttendanceSession> AttendanceSessions { get; set; } = new List<AttendanceSession>();
+        public ICollection<Installment> Installments { get; set; } = new List<Installment>();
     }
 }

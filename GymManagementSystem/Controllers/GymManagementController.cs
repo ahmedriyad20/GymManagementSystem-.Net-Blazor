@@ -197,5 +197,18 @@ namespace GymManagementSystem.Controllers
             var result = await gymManagementService.GetEarningsDashboardAsync(year, month);
             return Ok(result);
         }
+
+        [HttpGet("transactions")]
+        public async Task<IActionResult> GetTransactionsHistory()
+        {
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Unauthorized(new { message = "User not authenticated." });
+            }
+
+            var result = await gymManagementService.GetTransactionsHistoryAsync(userId);
+            return Ok(result);
+        }
     }
 }
