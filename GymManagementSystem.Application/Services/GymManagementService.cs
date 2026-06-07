@@ -30,12 +30,12 @@ namespace GymManagementSystem.Services
 
             await EnsureTraineeAccessAsync(trainee, currentUserId);
 
-            var price = await subscriptionPriceRepository.GetAll()
-                .FirstOrDefaultAsync(p => p.SubscriptionPlan == command.SubscriptionPlan && p.SubscriptionPeriod == command.SubscriptionPeriod)
-                ?? throw new InvalidOperationException("Subscription price not configured for selected plan and period.");
+            if (command.SubscriptionPrice <= 0)
+            {
+                throw new InvalidOperationException("Subscription price must be greater than zero.");
+            }
 
-            var totalAmount = price.Price;
-            if (command.PaidAmount < 0 || command.PaidAmount > totalAmount)
+            if (command.PaidAmount < 0 || command.PaidAmount > command.SubscriptionPrice)
             {
                 throw new InvalidOperationException("Invalid paid amount.");
             }
@@ -45,9 +45,10 @@ namespace GymManagementSystem.Services
                 TraineeId = command.TraineeId,
                 SubscriptionPlan = command.SubscriptionPlan,
                 SubscriptionPeriod = command.SubscriptionPeriod,
-                TotalAmount = totalAmount,
+                SubscriptionPrice = command.SubscriptionPrice,
+                TotalAmount = command.SubscriptionPrice,
                 PaidAmount = command.PaidAmount,
-                RemainingAmount = totalAmount - command.PaidAmount,
+                RemainingAmount = command.SubscriptionPrice - command.PaidAmount,
                 StartDate = command.StartDate,
                 EndDate = CalculateEndDate(command.StartDate, command.SubscriptionPeriod)
             };
@@ -81,21 +82,22 @@ namespace GymManagementSystem.Services
 
             await EnsureTraineeAccessAsync(subscription.Trainee, currentUserId);
 
-            var price = await subscriptionPriceRepository.GetAll()
-                .FirstOrDefaultAsync(p => p.SubscriptionPlan == command.SubscriptionPlan && p.SubscriptionPeriod == command.SubscriptionPeriod)
-                ?? throw new InvalidOperationException("Subscription price not configured for selected plan and period.");
+            if (command.SubscriptionPrice <= 0)
+            {
+                throw new InvalidOperationException("Subscription price must be greater than zero.");
+            }
 
-            var totalAmount = price.Price;
-            if (command.PaidAmount < 0 || command.PaidAmount > totalAmount)
+            if (command.PaidAmount < 0 || command.PaidAmount > command.SubscriptionPrice)
             {
                 throw new InvalidOperationException("Invalid paid amount.");
             }
 
             subscription.SubscriptionPlan = command.SubscriptionPlan;
             subscription.SubscriptionPeriod = command.SubscriptionPeriod;
-            subscription.TotalAmount = totalAmount;
+            subscription.SubscriptionPrice = command.SubscriptionPrice;
+            subscription.TotalAmount = command.SubscriptionPrice;
             subscription.PaidAmount = command.PaidAmount;
-            subscription.RemainingAmount = totalAmount - command.PaidAmount;
+            subscription.RemainingAmount = command.SubscriptionPrice - command.PaidAmount;
             subscription.StartDate = command.StartDate;
             subscription.EndDate = CalculateEndDate(command.StartDate, command.SubscriptionPeriod);
 
@@ -534,6 +536,7 @@ namespace GymManagementSystem.Services
                 SubscriptionPlan = subscription.SubscriptionPlan.ToString(),
                 SubscriptionPeriod = subscription.SubscriptionPeriod.ToString(),
                 TotalAmount = subscription.TotalAmount,
+                SubscriptionPrice = subscription.SubscriptionPrice,
                 PaidAmount = subscription.PaidAmount,
                 RemainingAmount = subscription.RemainingAmount,
                 StartDate = subscription.StartDate,

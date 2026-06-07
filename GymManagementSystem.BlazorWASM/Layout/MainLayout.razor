@@ -1,8 +1,14 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 @inject NavigationManager Navigation
 @inject JwtAuthenticationStateProvider AuthStateProvider
 
-<div class="lion-layout @(isSidebarCollapsed ? "sidebar-collapsed" : string.Empty)" dir="rtl">
+<div class="lion-layout @(isSidebarCollapsed ? "sidebar-collapsed" : string.Empty) @(isMobileSidebarOpen ? "mobile-sidebar-open" : string.Empty)" dir="rtl">
+    @if (isMobileSidebarOpen)
+    {
+        <div class="mobile-sidebar-backdrop" @onclick="ToggleMobileSidebar"></div>
+    }
+
     <aside class="lion-sidebar">
         <div class="lion-brand">
             <div class="lion-brand-badge">LG</div>
@@ -12,6 +18,9 @@
             </div>
             <button class="btn btn-light btn-sm sidebar-toggle" type="button" @onclick="ToggleSidebar">
                 <i class="bi @(isSidebarCollapsed ? "bi-chevron-left" : "bi-chevron-right")"></i>
+            </button>
+            <button class="btn btn-light btn-sm sidebar-close-mobile" type="button" @onclick="ToggleMobileSidebar">
+                <i class="bi bi-x-lg"></i>
             </button>
         </div>
 
@@ -43,6 +52,9 @@
     <section class="lion-main">
         <header class="lion-topbar">
             <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-light btn-sm mobile-sidebar-toggle" type="button" @onclick="ToggleMobileSidebar">
+                    <i class="bi bi-list fs-4"></i>
+                </button>
                 <span class="fw-bold text-primary">Lion Gym Manager</span>
             </div>
             <div class="lion-top-actions">
@@ -59,10 +71,13 @@
 
 @code {
     private bool isSidebarCollapsed;
+    private bool isMobileSidebarOpen;
     private bool isFemaleOnlyScope;
 
     protected override async Task OnInitializedAsync()
     {
+        Navigation.LocationChanged += OnLocationChanged;
+
         var state = await AuthStateProvider.GetAuthenticationStateAsync();
         if (state.User.Identity?.IsAuthenticated != true)
         {
@@ -76,9 +91,25 @@
 
     private void ToggleSidebar() => isSidebarCollapsed = !isSidebarCollapsed;
 
+    private void ToggleMobileSidebar() => isMobileSidebarOpen = !isMobileSidebarOpen;
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        if (isMobileSidebarOpen)
+        {
+            isMobileSidebarOpen = false;
+            StateHasChanged();
+        }
+    }
+
     private async Task LogoutAsync()
     {
         await AuthStateProvider.MarkUserAsLoggedOutAsync();
         Navigation.NavigateTo("/login", forceLoad: false, replace: true);
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
     }
 }

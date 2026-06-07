@@ -11,6 +11,7 @@ namespace GymManagementSystem.Entities
         public decimal PaidAmount { get; set; }
         public decimal RemainingAmount { get; set; } 
         public decimal TotalAmount { get; set; }
+        public decimal SubscriptionPrice { get; set; }
 
         public enSubscriptionPlan SubscriptionPlan { get; set; }
         public enSubscriptionPeriod SubscriptionPeriod { get; set; }

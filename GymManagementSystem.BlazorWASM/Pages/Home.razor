@@ -240,7 +240,7 @@
                                     <svg width="120" height="120" viewBox="0 0 120 120" class="progress-ring">
                                         <circle cx="60" cy="60" r="50" class="progress-ring-bg" stroke="#f1f3f5" stroke-width="8" fill="transparent" />
                                         <circle cx="60" cy="60" r="50" class="progress-ring-bar" stroke="var(--bs-primary)" stroke-width="8" fill="transparent"
-                                                stroke-dasharray="314.16" stroke-dashoffset="@strokeDashoffset" stroke-linecap="round" />
+                                                stroke-dasharray="314.16" stroke-dashoffset="@(strokeDashoffset.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))" stroke-linecap="round" />
                                         <text x="50%" y="50%" text-anchor="middle" dy=".3em" class="progress-ring-text text-dark" font-weight="bold" font-size="20">
                                             @activePercentage%
                                         </text>

@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject ApiClient ApiClient
 @inject NavigationManager Navigation
+@using System.ComponentModel.DataAnnotations
 
 <div class="register-page">
     <div class="register-header mb-4">
@@ -77,23 +78,28 @@
                 <h3 class="section-title">تفاصيل الاشتراك</h3>
 
                 <div class="row g-3">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">خطة الاشتراك</label>
                         <InputSelect class="form-select form-select-lg" @bind-Value="form.SubscriptionPlan" @bind-Value:after="OnSubscriptionDetailsChanged">
-                            <option value="@enSubscriptionPlan.Basic">Basic</option>
-                            <option value="@enSubscriptionPlan.Cardio">Cardio</option>
+                            <option value="@enSubscriptionPlan.Basic">Basic (أساسي)</option>
+                            <option value="@enSubscriptionPlan.Cardio">Cardio (كارديو)</option>
                         </InputSelect>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label class="form-label">المدة</label>
                         <InputSelect class="form-select form-select-lg" @bind-Value="form.SubscriptionPeriod" @bind-Value:after="OnSubscriptionDetailsChanged">
-                            <option value="@enSubscriptionPeriod.Daily">Daily</option>
-                            <option value="@enSubscriptionPeriod.Monthly">Monthly</option>
-                            <option value="@enSubscriptionPeriod.SixMonths">SixMonths</option>
-                            <option value="@enSubscriptionPeriod.Yearly">Yearly</option>
+                            <option value="@enSubscriptionPeriod.Daily">Daily (يومي)</option>
+                            <option value="@enSubscriptionPeriod.Monthly">Monthly (شهري)</option>
+                            <option value="@enSubscriptionPeriod.SixMonths">6 Months (6 أشهر)</option>
+                            <option value="@enSubscriptionPeriod.Yearly">Yearly (سنوي)</option>
                         </InputSelect>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
+                        <label class="form-label">السعر (ج.م)</label>
+                        <InputNumber class="form-control form-control-lg" @bind-Value="form.SubscriptionPrice" @bind-Value:after="OnPriceInputChanged" min="0.01" step="0.01" />
+                        <ValidationMessage For="() => form.SubscriptionPrice" />
+                    </div>
+                    <div class="col-md-3">
                         <label class="form-label">تاريخ بداية الاشتراك</label>
                         <InputDate class="form-control form-control-lg" @bind-Value="form.StartDate" />
                     </div>
@@ -102,7 +108,7 @@
                 @if (prices.Count > 0)
                 {
                     <div class="price-hint mt-3">
-                        السعر الحالي: <b>@ResolveTotalPrice()</b>
+                        السعر الحالي: <b>@form.SubscriptionPrice.ToString("0.##") ج.م</b>
                     </div>
                 }
             </div>
@@ -167,7 +173,7 @@
 
         try
         {
-            var total = ResolveTotalPrice();
+            var total = form.SubscriptionPrice;
             if (form.IsFullyPaid)
             {
                 form.PaidAmount = total;
@@ -193,6 +199,7 @@
                     TraineeId = traineeId,
                     SubscriptionPlan = form.SubscriptionPlan,
                     SubscriptionPeriod = form.SubscriptionPeriod,
+                    SubscriptionPrice = form.SubscriptionPrice,
                     PaidAmount = form.PaidAmount,
                     StartDate = form.StartDate
                 });
@@ -202,6 +209,7 @@
             form = new RegistrationForm();
             selectedPhoto = null;
             selectedPhotoName = null;
+            OnSubscriptionDetailsChanged();
         }
         catch (Exception ex)
         {
@@ -222,6 +230,21 @@
     private void OnSubscriptionDetailsChanged()
     {
         var total = ResolveTotalPrice();
+        form.SubscriptionPrice = total;
+        if (form.IsFullyPaid)
+        {
+            form.PaidAmount = total;
+            form.RemainingAmount = 0;
+        }
+        else
+        {
+            form.RemainingAmount = Math.Max(0, total - form.PaidAmount);
+        }
+    }
+
+    private void OnPriceInputChanged()
+    {
+        var total = form.SubscriptionPrice;
         if (form.IsFullyPaid)
         {
             form.PaidAmount = total;
@@ -235,7 +258,7 @@
 
     private void OnPaidAmountChanged()
     {
-        var total = ResolveTotalPrice();
+        var total = form.SubscriptionPrice;
         if (form.PaidAmount >= total)
         {
             form.PaidAmount = total;
@@ -251,7 +274,7 @@
 
     private void OnRemainingAmountChanged()
     {
-        var total = ResolveTotalPrice();
+        var total = form.SubscriptionPrice;
         if (form.RemainingAmount >= total)
         {
             form.RemainingAmount = total;
@@ -303,8 +326,12 @@
 
     private class RegistrationForm
     {
+        [Required(ErrorMessage = "الاسم مطلوب.")]
         public string Name { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "رقم الهاتف مطلوب.")]
         public string Phone { get; set; } = string.Empty;
+
         public DateTime DateOfBirth { get; set; } = DateTime.Today.AddYears(-20);
         public enGender Gender { get; set; } = enGender.Male;
         public bool CreateSubscription { get; set; } = true;
@@ -312,7 +339,15 @@
         public enSubscriptionPeriod SubscriptionPeriod { get; set; } = enSubscriptionPeriod.Monthly;
         public DateTime StartDate { get; set; } = DateTime.Today;
         public bool IsFullyPaid { get; set; } = true;
+
+        [Range(0, double.MaxValue, ErrorMessage = "المبلغ المتبقي يجب أن يكون 0 أو أكثر.")]
         public decimal RemainingAmount { get; set; }
+
+        [Range(0, double.MaxValue, ErrorMessage = "المبلغ المدفوع يجب أن يكون 0 أو أكثر.")]
         public decimal PaidAmount { get; set; }
+
+        [Required(ErrorMessage = "سعر الاشتراك مطلوب.")]
+        [Range(0.01, double.MaxValue, ErrorMessage = "يجب أن يكون سعر الاشتراك أكبر من 0.")]
+        public decimal SubscriptionPrice { get; set; }
     }
 }

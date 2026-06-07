@@ -7,6 +7,7 @@ namespace GymManagementSystem.DTOs.Subscription.Results
         public string SubscriptionPlan { get; set; } = string.Empty;
         public string SubscriptionPeriod { get; set; } = string.Empty;
         public decimal TotalAmount { get; set; }
+        public decimal SubscriptionPrice { get; set; }
         public decimal PaidAmount { get; set; }
         public decimal RemainingAmount { get; set; }
         public DateTime StartDate { get; set; }

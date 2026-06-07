@@ -8,6 +8,7 @@ namespace GymManagementSystem.DTOs.Subscription.Commands
         public enSubscriptionPlan SubscriptionPlan { get; set; }
         public enSubscriptionPeriod SubscriptionPeriod { get; set; }
         public decimal PaidAmount { get; set; }
+        public decimal SubscriptionPrice { get; set; }
         public DateTime StartDate { get; set; }
     }
 }

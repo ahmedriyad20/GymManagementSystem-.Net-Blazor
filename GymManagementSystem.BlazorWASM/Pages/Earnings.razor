@@ -128,7 +128,8 @@
                                     {
                                         var h = Math.Max(8m, (p.Amount / max) * 100m);
                                         <div class="trend-bar-wrap" title="@FormatMoney(p.Amount)">
-                                            <div class="trend-bar" style="height:@h%;"></div>
+                                            <span class="trend-value mb-1 fw-semibold text-primary">@p.Amount.ToString("N0") ج.م</span>
+                                            <div class="trend-bar" style="height:@(h.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%;"></div>
                                             <div class="trend-label">@MonthNameAr(p.Month)</div>
                                         </div>
                                     }

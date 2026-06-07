@@ -109,6 +109,7 @@ namespace GymManagementSystem.Services
                         SubscriptionPlan = s.SubscriptionPlan.ToString(),
                         SubscriptionPeriod = s.SubscriptionPeriod.ToString(),
                         TotalAmount = s.TotalAmount,
+                        SubscriptionPrice = s.SubscriptionPrice,
                         PaidAmount = s.PaidAmount,
                         RemainingAmount = s.RemainingAmount,
                         StartDate = s.StartDate,

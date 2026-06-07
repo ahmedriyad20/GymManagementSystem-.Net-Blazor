@@ -1,4 +1,4 @@
-﻿#blazor-error-ui {
+#blazor-error-ui {
     background: #fff3cd;
     bottom: 0;
     box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
@@ -455,6 +455,32 @@ body {
     border-radius: 8px 8px 0 0;
     background: linear-gradient(180deg, #0e43c6 0%, #7ea1ef 100%);
     min-height: 8%;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), filter 0.25s ease;
+}
+
+.trend-bar-wrap:hover .trend-bar {
+    transform: scaleY(1.04);
+    filter: brightness(1.1);
+    cursor: pointer;
+}
+
+.trend-value {
+    font-size: 0.82rem;
+    color: #1246cb;
+    font-weight: 700;
+    margin-bottom: 2px;
+    background: rgba(18, 70, 203, 0.08);
+    padding: 2px 6px;
+    border-radius: 6px;
+    white-space: nowrap;
+    opacity: 0.85;
+    transition: opacity 0.25s ease, transform 0.25s ease, background 0.25s ease;
+}
+
+.trend-bar-wrap:hover .trend-value {
+    opacity: 1;
+    transform: translateY(-3px);
+    background: rgba(18, 70, 203, 0.12);
 }
 
 .trend-label {
@@ -469,21 +495,114 @@ body {
     }
 }
 
+/* Mobile sidebar toggle button styles */
+.mobile-sidebar-toggle {
+    display: none;
+}
+
+.sidebar-close-mobile {
+    display: none;
+    margin-inline-start: auto;
+}
+
+.mobile-sidebar-backdrop {
+    display: none;
+}
+
 @media (max-width: 900px) {
-    .lion-layout {
-        flex-direction: column;
+    .mobile-sidebar-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .sidebar-close-mobile {
+        display: inline-flex;
     }
 
     .lion-sidebar {
-        width: auto;
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        right: 0; /* Since the application is RTL (dir="rtl") */
+        width: 285px;
+        height: 100vh;
+        z-index: 1050;
+        background: #f8faff;
+        border-left: 1px solid #cfd7e7;
+        border-right: none;
+        box-shadow: -4px 0 15px rgba(0, 0, 0, 0.1);
+        transform: translateX(100%); /* Slides out of view to the right */
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        padding: 18px 14px;
     }
 
+    /* When the sidebar is toggled open on mobile */
+    .mobile-sidebar-open .lion-sidebar {
+        transform: translateX(0);
+    }
+
+    /* Backdrop overlay when sidebar is open on mobile */
+    .mobile-sidebar-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 1040;
+        backdrop-filter: blur(2px);
+    }
+
+    /* Force the layout content and topbar to span full width */
+    .lion-main {
+        width: 100%;
+        margin-right: 0;
+    }
+
+    .lion-topbar {
+        padding: 0 16px;
+    }
+
+    .lion-content {
+        padding: 16px 12px;
+    }
+
+    /* Ensure desktop sidebar collapse styles don't conflict on mobile */
     .sidebar-collapsed .lion-sidebar {
-        width: auto;
+        width: 285px !important;
+        padding: 18px 14px !important;
+        transform: translateX(100%);
+    }
+    
+    .mobile-sidebar-open.sidebar-collapsed .lion-sidebar {
+        transform: translateX(0);
     }
 
     .sidebar-collapsed .sidebar-label {
-        display: inline;
+        display: inline !important;
+    }
+    
+    .sidebar-collapsed .lion-brand {
+        justify-content: flex-start !important;
+    }
+    
+    .sidebar-collapsed .lion-nav a,
+    .sidebar-collapsed .lion-footer-links a,
+    .sidebar-collapsed .lion-footer-links button,
+    .sidebar-collapsed .lion-sidebar .btn-primary {
+        justify-content: flex-start !important;
+        gap: 8px !important;
+    }
+
+    .sidebar-toggle {
+        display: none !important;
+    }
+
+    /* Responsive improvements for key cards and page forms/filters */
+    .trainees-page .trainees-search,
+    .trainees-page .trainees-filter {
+        max-width: 100% !important;
+        width: 100% !important;
+        flex: 1 1 100%;
     }
 }
 

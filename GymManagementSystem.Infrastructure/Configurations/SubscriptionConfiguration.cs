@@ -1,4 +1,4 @@
-﻿using GymManagementSystem.Entities;
+using GymManagementSystem.Entities;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -18,6 +18,9 @@ namespace GymManagementSystem.Configurations
                 .HasColumnType("decimal(18,2)")
                 .IsRequired();
             builder.Property(s => s.TotalAmount)
+                .HasColumnType("decimal(18,2)")
+                .IsRequired();
+            builder.Property(s => s.SubscriptionPrice)
                 .HasColumnType("decimal(18,2)")
                 .IsRequired();
             builder.Property(s => s.SubscriptionPlan)

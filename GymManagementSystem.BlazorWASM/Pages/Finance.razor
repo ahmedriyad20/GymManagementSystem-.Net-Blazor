@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @inject ApiClient ApiClient
 @inject JwtAuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
 
 <div class="finance-page">
     <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
@@ -61,6 +62,26 @@
     </div>
 
     <div class="card border-0 shadow-sm trainees-table-card">
+        <div class="card-body border-bottom">
+            <div class="row g-3 align-items-center">
+                <div class="col-12 col-md-4">
+                    <label class="form-label small text-secondary">البحث بالاسم أو الهاتف</label>
+                    <input class="form-control" @bind="searchText" @bind:event="oninput" placeholder="بحث بالاسم أو الهاتف..." />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label small text-secondary">من تاريخ الاشتراك</label>
+                    <input type="date" class="form-control" @bind="filterFromDate" @bind:after="ApplyFilters" />
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label small text-secondary">إلى تاريخ الاشتراك</label>
+                    <input type="date" class="form-control" @bind="filterToDate" @bind:after="ApplyFilters" />
+                </div>
+                <div class="col-12 col-md-2 d-grid align-self-end">
+                    <button class="btn btn-outline-secondary" type="button" @onclick="ClearFilters">إعادة تعيين</button>
+                </div>
+            </div>
+        </div>
+
         @if (loading)
         {
             <div class="p-4 text-secondary">جاري تحميل البيانات...</div>
@@ -71,6 +92,7 @@
                 <table class="table align-middle mb-0 trainees-table">
                     <thead>
                         <tr>
+                            <th>الصورة</th>
                             <th>اسم المتدرب</th>
                             <th>رقم الهاتف</th>
                             <th>سعر الاشتراك الإجمالي</th>
@@ -80,15 +102,25 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @if (rows.Count == 0)
+                        @if (FilteredCount == 0)
                         {
-                            <tr><td colspan="6" class="text-center py-4 text-secondary">لا توجد مبالغ مستحقة حالياً</td></tr>
+                            <tr><td colspan="7" class="text-center py-4 text-secondary">لا توجد مبالغ مستحقة حالياً تطابق الفلاتر</td></tr>
                         }
                         else
                         {
-                            @foreach (var row in rows.Where(MatchesSearch).OrderByDescending(r => r.RemainingAmount))
+                            @foreach (var row in rows.Where(MatchesFilters).OrderByDescending(r => r.RemainingAmount))
                             {
                                 <tr>
+                                    <td>
+                                        @if (!string.IsNullOrWhiteSpace(row.PhotoPath))
+                                        {
+                                            <img src="@GetPhotoUrl(row.PhotoPath)" alt="@row.TraineeName" class="trainee-photo" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover;" />
+                                        }
+                                        else
+                                        {
+                                            <div class="trainee-avatar" style="width: 38px; height: 38px; border-radius: 50%; background-color: #f0f4ff; color: #3b82f6; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.95rem;">@GetInitials(row.TraineeName)</div>
+                                        }
+                                    </td>
                                     <td class="fw-semibold">@row.TraineeName</td>
                                     <td>@row.Phone</td>
                                     <td>@row.TotalAmount.ToString("0.##") ج.م</td>
@@ -110,7 +142,6 @@
         <div class="card-footer bg-white d-flex justify-content-between align-items-center">
             <span class="text-secondary">عرض @FilteredCount من @rows.Count متدرب</span>
             <div class="d-flex gap-2">
-                <InputText class="form-control form-control-sm" @bind-Value="searchText" placeholder="بحث بالاسم أو الهاتف..." />
                 <button class="btn btn-sm btn-outline-secondary" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise"></i></button>
             </div>
         </div>
@@ -158,10 +189,12 @@
     private string? message;
     private decimal CollectedThisMonth;
     private bool isFemaleOnlyScope;
+    private DateTime? filterFromDate;
+    private DateTime? filterToDate;
 
     private List<OutstandingRowVm> rows = [];
-    private decimal TotalOutstanding => rows.Sum(x => x.RemainingAmount);
-    private int FilteredCount => rows.Count(MatchesSearch);
+    private decimal TotalOutstanding => rows.Where(MatchesFilters).Sum(x => x.RemainingAmount);
+    private int FilteredCount => rows.Count(MatchesFilters);
 
     private bool isPaymentModalOpen;
     private bool processingPayment;
@@ -231,18 +264,69 @@
                 TotalAmount = total,
                 PaidAmount = paid,
                 RemainingAmount = remaining,
-                Gender = trainee?.Gender ?? string.Empty
+                Gender = trainee?.Gender ?? string.Empty,
+                PhotoPath = trainee?.PhotoPath,
+                StartDate = sub?.StartDate ?? DateTime.MinValue
             };
         });
 
         return (await Task.WhenAll(tasks)).ToList();
     }
 
-    private bool MatchesSearch(OutstandingRowVm row)
+    private bool MatchesFilters(OutstandingRowVm row)
     {
-        if (string.IsNullOrWhiteSpace(searchText)) return true;
-        return row.TraineeName.Contains(searchText, StringComparison.OrdinalIgnoreCase)
-               || row.Phone.Contains(searchText, StringComparison.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            var matchSearch = row.TraineeName.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+                              || row.Phone.Contains(searchText, StringComparison.OrdinalIgnoreCase);
+            if (!matchSearch) return false;
+        }
+
+        if (filterFromDate.HasValue && row.StartDate.Date < filterFromDate.Value.Date)
+        {
+            return false;
+        }
+
+        if (filterToDate.HasValue && row.StartDate.Date > filterToDate.Value.Date)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ApplyFilters()
+    {
+        StateHasChanged();
+    }
+
+    private void ClearFilters()
+    {
+        searchText = null;
+        filterFromDate = null;
+        filterToDate = null;
+        StateHasChanged();
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "LG";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpperInvariant();
+        return string.Concat(parts[0][0], parts[1][0]).ToUpperInvariant();
+    }
+
+    private string GetPhotoUrl(string photoPath)
+    {
+        if (string.IsNullOrWhiteSpace(photoPath)) return string.Empty;
+
+        if (Navigation.Uri.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+            photoPath.StartsWith("http://localhost:5053/", StringComparison.OrdinalIgnoreCase))
+        {
+            return photoPath.Replace("http://localhost:5053/", "https://localhost:7195/");
+        }
+
+        return photoPath;
     }
 
     private void OpenPaymentModal(OutstandingRowVm row)
@@ -310,5 +394,7 @@
         public decimal PaidAmount { get; set; }
         public decimal RemainingAmount { get; set; }
         public string Gender { get; set; } = string.Empty;
+        public string? PhotoPath { get; set; }
+        public DateTime StartDate { get; set; }
     }
 }

@@ -123,7 +123,7 @@ builder.Services.AddSwaggerGen(swagger =>
         Scheme = "Bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Enter 'Bearer' [space] and then your valid token in the text input below.\r\n\r\nExample: \"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\"",
+        Description = "Enter your JWT token only (without the 'Bearer ' prefix).\r\n\r\nExample: \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\"",
     });
     swagger.AddSecurityRequirement(document => new OpenApiSecurityRequirement
     {
@@ -144,6 +144,10 @@ else
 {
     app.UseHttpsRedirection();
 }
+
+app.UseSwagger();
+app.UseSwaggerUI();
+
 app.UseStaticFiles();
 app.UseCors("AllowAll");
 
